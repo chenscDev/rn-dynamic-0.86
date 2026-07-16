@@ -1,0 +1,17 @@
+{
+  "extends": "./tooling/tsconfig.json",
+  "compilerOptions": {
+    "types": ["jest"],
+    "moduleSuffixes": [".ios", ".android", ""]
+  },
+  "include": [
+    "index.js",
+    "app/**/*.ts",
+    "app/**/*.tsx",
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "packages/**/*.ts",
+    "packages/**/*.tsx"
+  ],
+  "exclude": ["**/node_modules", "**/Pods", "project/dist", "platforms"]
+}

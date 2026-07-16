@@ -1,0 +1,13 @@
+{
+  "provider": "local",
+  "baseUrl": "http://127.0.0.1:8787",
+  "targetDir": "project/dist/cdn-local",
+  "pathTemplate": "rn/{rnVersion}/{key}/{platform}/{fileName}",
+  "cdn": {
+    "endpoint": "",
+    "bucket": "",
+    "accessKeyEnv": "RN_CDN_ACCESS_KEY",
+    "secretKeyEnv": "RN_CDN_SECRET_KEY",
+    "comment": "后期接入真实 CDN 时填写；当前 provider=cdn 会明确报未实现"
+  }
+}

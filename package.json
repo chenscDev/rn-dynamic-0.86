@@ -1,0 +1,73 @@
+{
+  "name": "rn-dynamic-0.86",
+  "version": "0.1.0",
+  "private": true,
+  "description": "React Native 0.86 动态分包基座（纯原生嵌 RN / 整页替换）",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "android": "react-native run-android",
+    "ios": "react-native run-ios",
+    "lint": "eslint \"app/**/*.{js,jsx,ts,tsx}\" \"src/**/*.{js,jsx,ts,tsx}\" \"packages/**/*.{js,ts,tsx}\" \"index.js\"",
+    "start": "react-native start",
+    "test": "jest",
+    "pack:list": "node packages/bundler/bin/rn-pack.js list",
+    "pack:build": "node packages/bundler/bin/rn-pack.js build",
+    "pack:build:all": "node packages/bundler/bin/rn-pack.js build:all",
+    "pack:upload": "node packages/bundler/bin/rn-pack.js upload",
+    "pack:upload:all": "node packages/bundler/bin/rn-pack.js upload:all",
+    "pack:publish": "node packages/bundler/bin/rn-pack.js publish",
+    "prepare": "husky",
+    "lint:fix": "eslint \"app/**/*.{js,jsx,ts,tsx}\" \"src/**/*.{js,jsx,ts,tsx}\" \"packages/**/*.{js,ts,tsx}\" \"index.js\" --fix",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@react-navigation/native": "^7.1.14",
+    "@react-navigation/native-stack": "^7.3.21",
+    "react": "19.2.3",
+    "react-native": "0.86.0",
+    "react-native-safe-area-context": "^5.5.2",
+    "react-native-screens": "^4.13.1"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.25.2",
+    "@babel/preset-env": "^7.25.3",
+    "@babel/runtime": "^7.25.0",
+    "@react-native-community/cli": "20.1.0",
+    "@react-native-community/cli-platform-android": "20.1.0",
+    "@react-native-community/cli-platform-ios": "20.1.0",
+    "@react-native/babel-preset": "0.86.0",
+    "@react-native/eslint-config": "0.86.0",
+    "@react-native/metro-config": "0.86.0",
+    "@react-native/typescript-config": "0.86.0",
+    "@types/jest": "^29.5.13",
+    "@types/react": "^19.2.0",
+    "@types/react-test-renderer": "^19.1.0",
+    "eslint": "^8.19.0",
+    "husky": "9.1.7",
+    "jest": "^29.6.3",
+    "lint-staged": "15.5.2",
+    "prettier": "2.8.8",
+    "react-test-renderer": "19.2.3",
+    "typescript": "^5.8.3"
+  },
+  "engines": {
+    "node": "^20.19.4 || ^22.13.0 || ^24.3.0 || >=25.0.0"
+  },
+  "packageManager": "yarn@1.22.22",
+  "lint-staged": {
+    "app/**/*.{js,jsx,ts,tsx}": [
+      "eslint --fix"
+    ],
+    "src/**/*.{js,jsx,ts,tsx}": [
+      "eslint --fix"
+    ],
+    "packages/**/*.{js,ts,tsx}": [
+      "eslint --fix"
+    ],
+    "index.js": [
+      "eslint --fix"
+    ]
+  }
+}

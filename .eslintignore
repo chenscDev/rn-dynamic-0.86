@@ -1,0 +1,7 @@
+# 忽略构建产物与第三方目录，避免误报 / 资源管理器噪声
+node_modules/
+project/dist/
+platforms/
+coverage/
+*.bundle
+*.jsbundle

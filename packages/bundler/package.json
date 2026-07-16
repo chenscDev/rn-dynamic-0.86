@@ -1,0 +1,23 @@
+{
+  "name": "@rn-dynamic/bundler",
+  "version": "0.1.0",
+  "private": true,
+  "description": "按 src/<key> 目录打包分包、计算 hash、更新本地配置",
+  "bin": {
+    "rn-pack": "./bin/rn-pack.js"
+  },
+  "scripts": {
+    "list": "node ./bin/rn-pack.js list",
+    "build": "node ./bin/rn-pack.js build",
+    "build:all": "node ./bin/rn-pack.js build:all",
+    "upload": "node ./bin/rn-pack.js upload",
+    "upload:all": "node ./bin/rn-pack.js upload:all",
+    "publish": "node ./bin/rn-pack.js publish"
+  },
+  "dependencies": {
+    "@rn-dynamic/schema": "0.1.0"
+  },
+  "engines": {
+    "node": ">=22.11.0"
+  }
+}

@@ -1,0 +1,39 @@
+# 依赖与构建
+node_modules/
+**/node_modules/
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/sdks
+!.yarn/versions
+
+# 分包与本地 CDN 产物
+project/dist/
+*.bundle
+*.jsbundle
+*.hbc
+
+# 原生
+**/Pods/
+**/build/
+**/DerivedData/
+**/.gradle/
+**/local.properties
+**/*.xcuserdata
+**/*.xcworkspace
+!**/default.xcworkspace
+
+# 日志与系统
+*.log
+.DS_Store
+*.pem
+.env
+.env.*
+!.env.example
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.bak
