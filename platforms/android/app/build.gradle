@@ -41,6 +41,13 @@ android {
     compileSdk rootProject.ext.compileSdkVersion
 
     namespace "com.rndynamicbase"
+
+    sourceSets {
+        main {
+            java.srcDirs += ["../../../native/android/rn-bundle-loader/src/main/java"]
+        }
+    }
+
     defaultConfig {
         applicationId "com.rndynamicbase"
         minSdkVersion rootProject.ext.minSdkVersion
@@ -71,6 +78,8 @@ android {
 }
 
 dependencies {
+    implementation("androidx.appcompat:appcompat:1.7.0")
+
     // The version of react-native is set by the React Native Gradle Plugin
     implementation("com.facebook.react:react-android")
 

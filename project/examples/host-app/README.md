@@ -2,6 +2,8 @@
 
 本目录描述如何把 `rn-dynamic-0.86` 接到已有原生 App。第一期提供 SDK 源码与接入步骤，不强制生成完整可编译宿主工程（避免本机未装 CocoaPods / Android SDK 时阻塞基座搭建）。
 
+**Android 扫码内测 + Metro 联调清单**：[ANDROID_DEBUG_CHECKLIST.md](./ANDROID_DEBUG_CHECKLIST.md)
+
 ## 前置条件
 
 1. 宿主集成的 React Native 版本必须与基座一致：**0.86.0**

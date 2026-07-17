@@ -17,6 +17,7 @@ project/dist/
 # 原生
 **/Pods/
 **/build/
+**/.cxx/
 **/DerivedData/
 **/.gradle/
 **/local.properties
