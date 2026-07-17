@@ -14,27 +14,48 @@ project/dist/
 *.jsbundle
 *.hbc
 
-# 原生
+# Metro
+.metro-health-check*
+
+# 原生 Android
 **/Pods/
 **/build/
 **/.cxx/
-**/DerivedData/
+**/.externalNativeBuild/
 **/.gradle/
+**/.kotlin/
+**/captures/
 **/local.properties
+*.apk
+*.iml
+*.hprof
+
+# 原生 iOS
+**/DerivedData/
 **/*.xcuserdata
 **/*.xcworkspace
 !**/default.xcworkspace
+*.xcuserstate
+*.ipa
+.xcode.env.local
 
 # 日志与系统
 *.log
 .DS_Store
+Thumbs.db
 *.pem
 .env
 .env.*
 !.env.example
 
-# IDE
+# IDE / 编辑器
 .idea/
 .vscode/
 *.swp
 *.bak
+*.orig
+*.rej
+
+# 测试与类型检查产物
+coverage/
+*.tsbuildinfo
