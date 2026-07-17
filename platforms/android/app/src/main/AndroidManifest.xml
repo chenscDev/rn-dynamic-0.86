@@ -12,7 +12,7 @@
       android:usesCleartextTraffic="${usesCleartextTraffic}"
       android:supportsRtl="true">
       <activity
-        android:name=".DebugLauncherActivity"
+        android:name=".MainShellActivity"
         android:label="@string/app_name"
         android:exported="true">
         <intent-filter>

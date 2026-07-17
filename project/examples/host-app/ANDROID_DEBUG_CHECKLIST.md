@@ -21,7 +21,7 @@
   android:exported="false" />
 ```
 
-- [ ] 主页或「开发者入口」能跳到 `RNDebugEntryActivity`（正式包隐藏该入口）
+- [ ] 主页或「我的」页能跳到 `RNDebugEntryActivity`（正式包隐藏该入口）
 - [ ] 已集成 React Native 0.86 运行时（`ReactInstanceManager` / `ReactRootView` 等宿主侧依赖齐全）
 - [ ] `usesCleartextTraffic` 或网络安全配置允许访问 Metro（`http://局域网IP:8081`）
   - Debug 建议：`android:usesCleartextTraffic="true"`
@@ -36,14 +36,17 @@
 - [ ] 构建：
 
 ```bash
-./gradlew assembleDebug
-# 或你们的内测 flavor：assembleXxxDebug / assembleStaging
+cd platforms/android
+./gradlew assembleInternalRelease
+# 或本地调试：assembleInternalDebug
+# 或一键脚本（仓库根目录）：
+#   ./scripts/build-pgyer-apk.sh
 ```
 
-- [ ] 产物：`app/build/outputs/apk/**/*.apk`
+- [ ] 产物：`app/build/outputs/apk/internal/release/*.apk`
 - [ ] 上传蒲公英 / fir / 内网静态站，生成安装二维码
 - [ ] 手机扫码安装成功（允许「未知来源」）
-- [ ] 能打开 App，并进入 **RN 调试** 页
+- [ ] 能打开 App：**首页 / 我的** 为原生页（无需 Metro）；RN 开发走 **我的 → RN 调试入口**
 
 ---
 
@@ -139,7 +142,7 @@ CDN 路径约定：`rn/{rnVersion}/{channel}/{key}/{platform}/...`
 
 ## 最小闭环
 
-Debug APK 扫码安装 → 进入 `RNDebugEntryActivity` → 电脑 `yarn start` → 真机填 `IP:8081` → 打开 `home` 出页。
+内测 APK 扫码安装 → **首页 / 我的** 原生可离线查看 → **我的 → RN 调试入口** → 电脑 `yarn start` → 真机填 `IP:8081` → 打开 `home` 出页。
 
 相关文档：
 
@@ -161,7 +164,7 @@ cd rn-dynamic-0.86
 产物路径（直接上传蒲公英）：
 
 ```text
-project/dist/apk/RnDynamicBase-debug.apk
+project/dist/apk/RnDynamicBase-internal-release.apk
 ```
 
-说明：该包来自 `platforms/android` 本地 RN 壳（包名 `com.rndynamicbase`），Debug 模式安装后连电脑 Metro 做 RN 联调。完整业务宿主调试入口仍按上文 A–D 接入你们自己的 App。
+说明：该包为 `internalRelease` 内测壳（包名 `com.rndynamicbase`）。原生 Tab（首页/我的）安装即可用；RN 联调从「我的 → RN 调试入口」连电脑 Metro。完整业务宿主调试入口仍按上文 A–D 接入你们自己的 App。
