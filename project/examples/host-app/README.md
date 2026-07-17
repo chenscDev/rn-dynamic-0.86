@@ -52,9 +52,21 @@ startActivity(
 
 | 场景 | 操作 |
 |------|------|
-| 本地 | DevServer ON，填 host/port/key，连 Metro |
-| 测试 | DevServer OFF，填测试 URL；可清缓存验证 hash 更新 |
-| 正式 | 不要展示调试页 |
+| 本地 | DevServer ON，填 host/port/key/channel；默认双包（common + page），platform 由宿主带 |
+| 测试 | DevServer OFF，填 channel 走该分支 CDN 配置，或填测试 URL |
+| 正式 | 不要展示调试页；启动时对**线上 channel** 调用 `RNBundlePreloader.preloadCommon()` |
+
+业务 JS 在同级仓 `rn-biz-0.86` 开发，只需 `yarn start`，无需 `yarn ios/android`。  
+各分支可独立 `pack:publish --channel <分支>`；上线/回滚由管理台切换 channel 配置指针。
+
+CDN 路径：`rn/{rnVersion}/{channel}/{key}/{platform}/...`  
+配置：`project/config/channels/<channel>/bundles.local.json`
+
+## 正式入口与预加载
+
+- 正式：`RNBundleHostViewController` / `RNBundleHostActivity` 按配置 `dependsOn` 先加载 `common` 再挂载业务包
+- 启动预加载：`RNBundlePreloader.preloadCommon()`
+- 挂载：`RNBundleMount`（iOS `canImport(React)` / Android 反射调用 RN API）
 
 ## 发布关系
 

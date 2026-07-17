@@ -73,17 +73,24 @@ yarn install
 
 ## 快速开始
 
+> **业务开发请使用同级纯 RN 仓 [`rn-biz-0.86`](../rn-biz-0.86)**：日常只需 `yarn start`，由宿主调试入口按平台加载。  
+> 本仓继续提供 **原生 SDK**（`native/`）与加载协议参考。
+
 ### 1. 启动 Metro（本地调试）
 
+在业务仓：
+
 ```bash
+cd ../rn-biz-0.86
 yarn start
 ```
 
-原生调试入口填写：`host` + `port(8081)` + `key(home|demo|order)`。  
-Metro 分包地址示例：
+原生调试入口填写：`host` + `port(8081)` + `key(home|demo|order)`（platform 由宿主标识）。  
+Metro 双包地址示例：
 
 ```text
-http://<host>:8081/src/order/index.bundle?platform=ios&dev=true
+common: http://<host>:8081/packages/common/src/index.bundle?platform=ios&dev=true
+page:   http://<host>:8081/src/order/index.bundle?platform=ios&dev=true
 ```
 
 ### 2. 新增业务分包
@@ -218,4 +225,5 @@ yarn prepare
 
 - 可运行的完整 example 宿主工程
 - 真实 CDN SDK（`uploadWithCdn`）
-- 远程分包配置后台
+- 远程分包配置后台 / 多工程管理台（P3：灰度、回滚 UI）
+- 业务开发迁至同级仓 `rn-biz-0.86`（本仓专注原生 SDK）

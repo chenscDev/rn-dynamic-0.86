@@ -6,9 +6,19 @@ import java.io.File
 class RNBundleConfigException(message: String) : Exception(message)
 
 /**
- * 读取本地分包配置
+ * 读取本地分包配置（按 channel 文件）
+ *
+ * 路径约定：
+ * - 传入文件：直接读该 JSON
+ * - 传入 config 目录：读 channels/<channel>/bundles.local.json
  */
-class RNBundleConfigStore(private val configFile: File) {
+class RNBundleConfigStore(
+    configFileOrDir: File,
+    channelInput: String = "main",
+) {
+    val channel: String = normalizeChannel(channelInput)
+    val configFile: File = resolveConfigFile(configFileOrDir, channel)
+
     @Volatile
     private var cached: RNBundlesConfigFile? = null
 
@@ -38,6 +48,11 @@ class RNBundleConfigStore(private val configFile: File) {
                         url = obj.getString("url"),
                         hash = obj.getString("hash"),
                         platform = obj.getString("platform"),
+                        channel = obj.nullableString("channel") ?: channel,
+                        kind = obj.nullableString("kind"),
+                        dependsOn = obj.nullableStringList("dependsOn"),
+                        version = obj.nullableString("version"),
+                        assetsUrl = obj.nullableString("assetsUrl"),
                         localPath = obj.nullableString("localPath"),
                     )
                 }
@@ -46,6 +61,7 @@ class RNBundleConfigStore(private val configFile: File) {
             val parsed = RNBundlesConfigFile(
                 rnVersion = root.optString("rnVersion", ""),
                 baseVersion = root.optString("baseVersion", ""),
+                channel = root.optString("channel", channel).ifEmpty { channel },
                 updatedAt = root.optString("updatedAt", ""),
                 bundles = bundles,
             )
@@ -65,6 +81,33 @@ class RNBundleConfigStore(private val configFile: File) {
         return list.firstOrNull { it.platform == platform }
             ?: throw RNBundleConfigException("分包 $key 缺少当前平台配置")
     }
+
+    companion object {
+        fun normalizeChannel(raw: String): String {
+            val trimmed = raw.trim().lowercase()
+                .removePrefix("refs/heads/")
+            if (trimmed.isEmpty()) return "main"
+            val safe = trimmed
+                .replace('\\', '-')
+                .replace('/', '-')
+                .replace(Regex("[^a-z0-9._-]+"), "-")
+                .replace(Regex("-+"), "-")
+                .trim('-')
+            return if (safe.isEmpty()) "main" else safe
+        }
+
+        private fun resolveConfigFile(input: File, channel: String): File {
+            return when {
+                input.isFile -> input
+                input.isDirectory -> File(File(File(input, "channels"), channel), "bundles.local.json")
+                input.name == "bundles.local.json" -> {
+                    // 兼容旧路径 project/config/bundles.local.json → channels/<channel>/
+                    File(File(File(input.parentFile, "channels"), channel), "bundles.local.json")
+                }
+                else -> File(File(File(input, "channels"), channel), "bundles.local.json")
+            }
+        }
+    }
 }
 
 private fun JSONObject.nullableString(name: String): String? {
@@ -73,4 +116,16 @@ private fun JSONObject.nullableString(name: String): String? {
     }
     val value = optString(name, "")
     return value.ifEmpty { null }
+}
+
+private fun JSONObject.nullableStringList(name: String): List<String>? {
+    if (!has(name) || isNull(name)) {
+        return null
+    }
+    val arr = optJSONArray(name) ?: return null
+    val list = mutableListOf<String>()
+    for (i in 0 until arr.length()) {
+        list += arr.getString(i)
+    }
+    return list
 }

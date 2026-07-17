@@ -1,6 +1,6 @@
 import Foundation
 
-/// 单个分包配置（与 config/bundles.local.json 对齐）
+/// 单个分包配置（与 bundles JSON 对齐，支持 common/page + channel）
 public struct RNBundleItem: Codable, Equatable {
     public let key: String
     public let name: String?
@@ -8,6 +8,11 @@ public struct RNBundleItem: Codable, Equatable {
     public let url: String
     public let hash: String
     public let platform: String
+    public let channel: String?
+    public let kind: String?
+    public let dependsOn: [String]?
+    public let version: String?
+    public let assetsUrl: String?
     public let localPath: String?
 
     public init(
@@ -17,6 +22,11 @@ public struct RNBundleItem: Codable, Equatable {
         url: String,
         hash: String,
         platform: String,
+        channel: String? = nil,
+        kind: String? = nil,
+        dependsOn: [String]? = nil,
+        version: String? = nil,
+        assetsUrl: String? = nil,
         localPath: String? = nil
     ) {
         self.key = key
@@ -25,6 +35,11 @@ public struct RNBundleItem: Codable, Equatable {
         self.url = url
         self.hash = hash
         self.platform = platform
+        self.channel = channel
+        self.kind = kind
+        self.dependsOn = dependsOn
+        self.version = version
+        self.assetsUrl = assetsUrl
         self.localPath = localPath
     }
 
@@ -32,7 +47,14 @@ public struct RNBundleItem: Codable, Equatable {
         componentName ?? key
     }
 
-    /// 使用原生传入的 url 覆盖配置地址
+    public var resolvedKind: String {
+        kind ?? (key == "common" ? "common" : "page")
+    }
+
+    public var dependencyKeys: [String] {
+        dependsOn ?? (resolvedKind == "page" ? ["common"] : [])
+    }
+
     public func withURL(_ url: String) -> RNBundleItem {
         RNBundleItem(
             key: key,
@@ -41,15 +63,21 @@ public struct RNBundleItem: Codable, Equatable {
             url: url,
             hash: hash,
             platform: platform,
+            channel: channel,
+            kind: kind,
+            dependsOn: dependsOn,
+            version: version,
+            assetsUrl: assetsUrl,
             localPath: localPath
         )
     }
 }
 
-/// 配置文件根结构
+/// 单个 channel 的配置文件根结构
 public struct RNBundlesConfigFile: Codable {
     public let rnVersion: String
     public let baseVersion: String
+    public let channel: String?
     public let updatedAt: String
     public let bundles: [String: [RNBundleItem]]
 }
@@ -74,13 +102,43 @@ public enum RNBundleConfigError: Error, LocalizedError {
     }
 }
 
-/// 读取本地分包配置
+/// 读取本地分包配置（按 channel 文件）
 public final class RNBundleConfigStore {
     public let configURL: URL
+    public let channel: String
     private var cached: RNBundlesConfigFile?
 
-    public init(configURL: URL) {
-        self.configURL = configURL
+    /// - Parameters:
+    ///   - configURL: 完整配置文件 URL；若传目录则拼 channels/<channel>/bundles.local.json
+    ///   - channel: 发布通道
+    public init(configURL: URL, channel: String = "main") {
+        self.channel = Self.normalizeChannel(channel)
+        if configURL.hasDirectoryPath || configURL.pathExtension.isEmpty && !configURL.lastPathComponent.contains(".") {
+            self.configURL = configURL
+                .appendingPathComponent("channels", isDirectory: true)
+                .appendingPathComponent(self.channel, isDirectory: true)
+                .appendingPathComponent("bundles.local.json")
+        } else if configURL.lastPathComponent == "bundles.local.json",
+                  configURL.deletingLastPathComponent().lastPathComponent != self.channel {
+            // 兼容：传入 project/config/bundles.local.json 时改写到 channels/<channel>/
+            let configDir = configURL.deletingLastPathComponent()
+            self.configURL = configDir
+                .appendingPathComponent("channels", isDirectory: true)
+                .appendingPathComponent(self.channel, isDirectory: true)
+                .appendingPathComponent("bundles.local.json")
+        } else {
+            self.configURL = configURL
+        }
+    }
+
+    public static func normalizeChannel(_ raw: String) -> String {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            .replacingOccurrences(of: "refs/heads/", with: "")
+        if trimmed.isEmpty { return "main" }
+        let safe = trimmed
+            .replacingOccurrences(of: "/", with: "-")
+            .replacingOccurrences(of: "\\", with: "-")
+        return safe.isEmpty ? "main" : safe
     }
 
     public func load(forceReload: Bool = false) throws -> RNBundlesConfigFile {

@@ -7,13 +7,24 @@ import React
 /// 正式入口参数：整页打开某个分包
 public struct RNOpenBundleRequest {
     public let key: String
+    public var channel: String
     public var urlOverride: String?
     public var initialProps: [String: Any]
+    /// 是否按 dependsOn 加载 common（默认 true）
+    public var loadDependencies: Bool
 
-    public init(key: String, urlOverride: String? = nil, initialProps: [String: Any] = [:]) {
+    public init(
+        key: String,
+        channel: String = "main",
+        urlOverride: String? = nil,
+        initialProps: [String: Any] = [:],
+        loadDependencies: Bool = true
+    ) {
         self.key = key
+        self.channel = RNBundleConfigStore.normalizeChannel(channel)
         self.urlOverride = urlOverride
         self.initialProps = initialProps
+        self.loadDependencies = loadDependencies
     }
 }
 
@@ -22,35 +33,56 @@ public struct RNDebugEntryRequest {
     public var host: String
     public var port: Int
     public var key: String
+    public var platform: String
+    public var channel: String
     public var useDevServer: Bool
     public var bundleURL: String?
+    public var loadCommon: Bool
     public var initialProps: [String: Any]
 
     public init(
         host: String = "localhost",
         port: Int = 8081,
         key: String,
+        platform: String = "ios",
+        channel: String = "main",
         useDevServer: Bool = true,
         bundleURL: String? = nil,
+        loadCommon: Bool = true,
         initialProps: [String: Any] = [:]
     ) {
         self.host = host
         self.port = port
         self.key = key
+        self.platform = platform
+        self.channel = RNBundleConfigStore.normalizeChannel(channel)
         self.useDevServer = useDevServer
         self.bundleURL = bundleURL
+        self.loadCommon = loadCommon
         self.initialProps = initialProps
     }
 
-    /// Metro 多入口地址：/src/<key>/index.bundle
-    public var metroBundleURL: URL? {
+    /// Metro 业务包地址：/src/<key>/index.bundle
+    public var metroPageBundleURL: URL? {
+        metroURL(path: "/src/\(key)/index.bundle")
+    }
+
+    /// Metro 公共包地址：/packages/common/src/index.bundle
+    public var metroCommonBundleURL: URL? {
+        metroURL(path: "/packages/common/src/index.bundle")
+    }
+
+    /// 兼容旧字段名
+    public var metroBundleURL: URL? { metroPageBundleURL }
+
+    private func metroURL(path: String) -> URL? {
         var components = URLComponents()
         components.scheme = "http"
         components.host = host
         components.port = port
-        components.path = "/src/\(key)/index.bundle"
+        components.path = path
         components.queryItems = [
-            URLQueryItem(name: "platform", value: "ios"),
+            URLQueryItem(name: "platform", value: platform),
             URLQueryItem(name: "dev", value: "true"),
             URLQueryItem(name: "minify", value: "false"),
         ]
@@ -59,22 +91,15 @@ public struct RNDebugEntryRequest {
 }
 
 /**
- 整页替换（Mode A）宿主控制器骨架。
-
- 接入说明：
- 1. 宿主 App 已集成与基座一致的 React Native 0.86
- 2. 将本 SDK 源码加入工程
- 3. 配置文件指向仓库 config/bundles.local.json（或拷贝进 App Bundle）
- 4. push / present 本控制器即可打开对应分包
-
- 注意：此处保留 RCTRootView / RCTReactNativeFactory 的接入点注释，
- 便于在宿主完成 RN 依赖后补齐具体创建代码，避免本仓库在未 pod install 时无法编译演示。
+ 整页替换（Mode A）宿主控制器。
+ 支持 common 预依赖 + page 双包挂载。
  */
 public final class RNBundleHostViewController: UIViewController {
     private let request: RNOpenBundleRequest
     private let configStore: RNBundleConfigStore
     private let cache: RNBundleCache
     private let statusLabel = UILabel()
+    private var mountedView: UIView?
 
     public init(
         request: RNOpenBundleRequest,
@@ -95,7 +120,7 @@ public final class RNBundleHostViewController: UIViewController {
     public override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .systemBackground
-        title = request.key
+        title = "\(request.channel)/\(request.key)"
 
         statusLabel.numberOfLines = 0
         statusLabel.textAlignment = .center
@@ -107,35 +132,55 @@ public final class RNBundleHostViewController: UIViewController {
             statusLabel.centerYAnchor.constraint(equalTo: view.centerYAnchor),
         ])
 
-        statusLabel.text = "正在准备分包 \(request.key)..."
+        statusLabel.text = "正在准备 \(request.channel)/\(request.key)..."
         Task { await loadAndMount() }
     }
 
     private func loadAndMount() async {
         do {
-            var item = try configStore.item(forKey: request.key, platform: "ios")
+            var pageItem = try configStore.item(forKey: request.key, platform: "ios")
             if let urlOverride = request.urlOverride, !urlOverride.isEmpty {
-                item = item.withURL(urlOverride)
+                pageItem = pageItem.withURL(urlOverride)
             }
 
-            let fileURL = try await cache.resolveBundleFile(item: item)
-            await MainActor.run {
-                self.statusLabel.text = """
-                分包已就绪（Mode A 整页）
-                key: \(item.key)
-                hash: \(item.hash)
-                path: \(fileURL.path)
+            var commonURL: URL?
+            if request.loadDependencies {
+                for dep in pageItem.dependencyKeys {
+                    let depItem = try configStore.item(forKey: dep, platform: "ios")
+                    let file = try await cache.resolveBundleFile(item: depItem)
+                    if dep == "common" {
+                        commonURL = file
+                    }
+                }
+            }
 
-                请在宿主完成 RN 集成后，使用 RCTRootView
-                moduleName=\(item.moduleName)
-                bundleURL=fileURL
-                initialProperties=\(self.request.initialProps)
-                挂载到 self.view。
-                """
-                // TODO(宿主接入): 创建 React Root View 并 addSubview
-                // let rootView = RCTRootView(bundleURL: fileURL, moduleName: item.moduleName, initialProperties: request.initialProps, launchOptions: nil)
-                // rootView.frame = view.bounds
-                // view.addSubview(rootView)
+            let pageURL = try await cache.resolveBundleFile(item: pageItem)
+
+            await MainActor.run {
+                do {
+                    self.statusLabel.isHidden = true
+                    self.mountedView = try RNBundleMount.mount(
+                        in: self.view,
+                        request: RNBundleMountRequest(
+                            moduleName: pageItem.moduleName,
+                            pageBundleURL: pageURL,
+                            commonBundleURL: commonURL,
+                            initialProperties: self.request.initialProps
+                        )
+                    )
+                } catch {
+                    self.statusLabel.isHidden = false
+                    self.statusLabel.text = """
+                    分包文件已就绪，但挂载失败:
+                    \(error.localizedDescription)
+
+                    channel: \(self.request.channel)
+                    key: \(pageItem.key)
+                    hash: \(pageItem.hash)
+                    page: \(pageURL.path)
+                    common: \(commonURL?.path ?? "(无)")
+                    """
+                }
             }
         } catch {
             await MainActor.run {

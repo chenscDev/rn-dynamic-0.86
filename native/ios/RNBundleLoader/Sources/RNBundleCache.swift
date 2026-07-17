@@ -21,7 +21,7 @@ public enum RNBundleCacheError: Error, LocalizedError {
     }
 }
 
-/// 按 key + hash 缓存分包；hash 变化时强制重新拉取
+/// 按 key + hash 缓存分包；支持 preload
 public final class RNBundleCache {
     public let cacheDirectory: URL
 
@@ -36,15 +36,16 @@ public final class RNBundleCache {
         try FileManager.default.createDirectory(at: self.cacheDirectory, withIntermediateDirectories: true)
     }
 
-    public func localFileURL(key: String, hash: String) -> URL {
+    public func localFileURL(key: String, hash: String, platform: String = "ios") -> URL {
         cacheDirectory
             .appendingPathComponent(key, isDirectory: true)
-            .appendingPathComponent("\(key).ios.\(hash).bundle")
+            .appendingPathComponent("\(key).\(platform).\(hash).bundle")
     }
 
     /// 若本地已有对应 hash 则直接返回，否则下载/拷贝并校验
     public func resolveBundleFile(item: RNBundleItem) async throws -> URL {
-        let target = localFileURL(key: item.key, hash: item.hash)
+        let platform = item.platform.isEmpty ? "ios" : item.platform
+        let target = localFileURL(key: item.key, hash: item.hash, platform: platform)
         if FileManager.default.fileExists(atPath: target.path) {
             let actual = try Self.sha256Prefix(ofFileAt: target)
             if actual == item.hash {
@@ -53,12 +54,15 @@ public final class RNBundleCache {
             try? FileManager.default.removeItem(at: target)
         }
 
-        // 清理同 key 旧缓存，保证强制用新 hash
         let keyDir = cacheDirectory.appendingPathComponent(item.key, isDirectory: true)
-        if FileManager.default.fileExists(atPath: keyDir.path) {
-            try? FileManager.default.removeItem(at: keyDir)
-        }
         try FileManager.default.createDirectory(at: keyDir, withIntermediateDirectories: true)
+
+        // 仅删除同平台旧 hash，保留其他文件以便调试
+        if let children = try? FileManager.default.contentsOfDirectory(at: keyDir, includingPropertiesForKeys: nil) {
+            for file in children where file.lastPathComponent.contains(".\(platform).") && file.pathExtension == "bundle" {
+                try? FileManager.default.removeItem(at: file)
+            }
+        }
 
         let sourceURL = try makeURL(from: item.url)
         if sourceURL.isFileURL {
@@ -77,6 +81,12 @@ public final class RNBundleCache {
             throw RNBundleCacheError.hashMismatch(expected: item.hash, actual: actual)
         }
         return target
+    }
+
+    /// 预加载：下载并缓存，不挂载 RN
+    @discardableResult
+    public func preload(item: RNBundleItem) async throws -> URL {
+        try await resolveBundleFile(item: item)
     }
 
     public func clearAll() throws {
@@ -104,5 +114,34 @@ public final class RNBundleCache {
         let digest = SHA256.hash(data: data)
         let hex = digest.map { String(format: "%02x", $0) }.joined()
         return String(hex.prefix(length))
+    }
+}
+
+/// 启动预加载协调器：优先拉取指定 channel 的 common
+public final class RNBundlePreloader {
+    private let configStore: RNBundleConfigStore
+    private let cache: RNBundleCache
+    private let platform: String
+
+    public init(configStore: RNBundleConfigStore, cache: RNBundleCache, platform: String = "ios") {
+        self.configStore = configStore
+        self.cache = cache
+        self.platform = platform
+    }
+
+    /// App 启动时调用：预加载当前 channel 的 common
+    @discardableResult
+    public func preloadCommon() async throws -> URL? {
+        guard let item = try? configStore.item(forKey: "common", platform: platform) else {
+            return nil
+        }
+        return try await cache.preload(item: item)
+    }
+
+    /// 预加载指定业务包（可选，用于热点页）
+    @discardableResult
+    public func preloadPage(key: String) async throws -> URL {
+        let item = try configStore.item(forKey: key, platform: platform)
+        return try await cache.preload(item: item)
     }
 }

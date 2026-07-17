@@ -9,7 +9,7 @@ import java.security.MessageDigest
 class RNBundleCacheException(message: String) : Exception(message)
 
 /**
- * 按 key + hash 缓存分包；hash 变化时强制重新拉取
+ * 按 key + hash 缓存分包；支持 preload
  */
 class RNBundleCache(private val cacheDirectory: File) {
     init {
@@ -18,12 +18,13 @@ class RNBundleCache(private val cacheDirectory: File) {
         }
     }
 
-    fun localFile(key: String, hash: String): File {
-        return File(File(cacheDirectory, key), "$key.android.$hash.bundle")
+    fun localFile(key: String, hash: String, platform: String = "android"): File {
+        return File(File(cacheDirectory, key), "$key.$platform.$hash.bundle")
     }
 
     fun resolveBundleFile(item: RNBundleItem): File {
-        val target = localFile(item.key, item.hash)
+        val platform = item.platform.ifBlank { "android" }
+        val target = localFile(item.key, item.hash, platform)
         if (target.exists()) {
             val actual = sha256Prefix(target)
             if (actual == item.hash) {
@@ -33,11 +34,14 @@ class RNBundleCache(private val cacheDirectory: File) {
         }
 
         val keyDir = File(cacheDirectory, item.key)
-        if (keyDir.exists()) {
-            keyDir.deleteRecursively()
-        }
-        if (!keyDir.mkdirs()) {
+        if (!keyDir.exists() && !keyDir.mkdirs()) {
             throw RNBundleCacheException("无法创建分包缓存目录: ${keyDir.absolutePath}")
+        }
+        // 清理同平台旧 bundle
+        keyDir.listFiles()?.forEach { file ->
+            if (file.name.contains(".$platform.") && file.name.endsWith(".bundle")) {
+                file.delete()
+            }
         }
 
         val source = item.url
@@ -68,6 +72,9 @@ class RNBundleCache(private val cacheDirectory: File) {
         }
         return target
     }
+
+    /** 预加载：仅下载缓存 */
+    fun preload(item: RNBundleItem): File = resolveBundleFile(item)
 
     fun clearAll() {
         if (cacheDirectory.exists()) {
@@ -109,5 +116,28 @@ class RNBundleCache(private val cacheDirectory: File) {
             }
             return digest.digest().joinToString("") { "%02x".format(it) }.take(length)
         }
+    }
+}
+
+/**
+ * App 启动预加载 common
+ */
+class RNBundlePreloader(
+    private val configStore: RNBundleConfigStore,
+    private val cache: RNBundleCache,
+    private val platform: String = "android",
+) {
+    fun preloadCommon(): File? {
+        return try {
+            val item = configStore.item("common", platform)
+            cache.preload(item)
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    fun preloadPage(key: String): File {
+        val item = configStore.item(key, platform)
+        return cache.preload(item)
     }
 }

@@ -3,20 +3,25 @@ import UIKit
 /**
  本地 / 测试环境调试入口页面
 
- - 本地：填写 host + port + key，走 Metro（可使用 RN 自带调试）
- - 测试：关闭 DevServer，填写测试环境分包 URL，并展示强制清缓存等能力
+ - 本地：填写 host + port + key，走 Metro（双 URL：common + page）
+ - 测试：关闭 DevServer，填写测试环境分包 URL
+ - platform 固定为 ios（由本控制器所在宿主标识）
  */
 public final class RNDebugEntryViewController: UIViewController {
     private let hostField = UITextField()
     private let portField = UITextField()
     private let keyField = UITextField()
+    private let channelField = UITextField()
     private let urlField = UITextField()
     private let devSwitch = UISwitch()
+    private let commonSwitch = UISwitch()
     private let infoLabel = UILabel()
     private let cache: RNBundleCache
+    private let configRootURL: URL?
 
-    public init(cache: RNBundleCache) {
+    public init(cache: RNBundleCache, configRootURL: URL? = nil) {
         self.cache = cache
+        self.configRootURL = configRootURL
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -44,11 +49,18 @@ public final class RNDebugEntryViewController: UIViewController {
         keyField.borderStyle = .roundedRect
         keyField.autocapitalizationType = .none
 
-        urlField.placeholder = "测试环境 bundle URL（非 DevServer 时必填）"
+        channelField.placeholder = "channel（分支，如 order-main）"
+        channelField.text = "main"
+        channelField.borderStyle = .roundedRect
+        channelField.autocapitalizationType = .none
+        channelField.autocorrectionType = .no
+
+        urlField.placeholder = "测试环境 page bundle URL（非 DevServer 时必填）"
         urlField.borderStyle = .roundedRect
         urlField.autocapitalizationType = .none
 
         devSwitch.isOn = true
+        commonSwitch.isOn = true
 
         let openButton = UIButton(type: .system)
         openButton.setTitle("打开分包", for: .normal)
@@ -66,7 +78,9 @@ public final class RNDebugEntryViewController: UIViewController {
             labeled("Host", hostField),
             labeled("Port", portField),
             labeled("Key", keyField),
+            labeled("Channel", channelField),
             labeled("DevServer", devSwitch),
+            labeled("加载 common", commonSwitch),
             labeled("Bundle URL", urlField),
             openButton,
             clearButton,
@@ -97,11 +111,14 @@ public final class RNDebugEntryViewController: UIViewController {
     }
 
     private func refreshInfo() {
-        let mode = devSwitch.isOn ? "本地 Metro（可用 RN DevTools）" : "测试包 URL"
+        let mode = devSwitch.isOn ? "本地 Metro（双包调试）" : "测试包 / channel CDN"
         infoLabel.text = """
         模式: \(mode)
-        Metro 示例: http://host:port/src/key/index.bundle?platform=ios&dev=true
-        正式环境请使用配置入口，不要暴露本页面。
+        platform: ios（宿主标识）
+        channel: 发测/正式拉 CDN 时使用；Metro 调试用当前工作区源码
+        common: http://host:port/packages/common/src/index.bundle?platform=ios&dev=true
+        page:   http://host:port/src/key/index.bundle?platform=ios&dev=true
+        CDN:    rn/0.86.0/{channel}/{key}/ios/...
         """
     }
 
@@ -109,6 +126,7 @@ public final class RNDebugEntryViewController: UIViewController {
         refreshInfo()
         let port = Int(portField.text ?? "8081") ?? 8081
         let key = (keyField.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let channel = (channelField.text ?? "main").trimmingCharacters(in: .whitespacesAndNewlines)
         guard !key.isEmpty else {
             infoLabel.text = "请填写分包 key"
             return
@@ -118,36 +136,80 @@ public final class RNDebugEntryViewController: UIViewController {
             host: hostField.text ?? "localhost",
             port: port,
             key: key,
+            platform: "ios",
+            channel: channel,
             useDevServer: devSwitch.isOn,
             bundleURL: urlField.text,
-            initialProps: ["fromNative": "debug-entry"]
+            loadCommon: commonSwitch.isOn,
+            initialProps: ["fromNative": "debug-entry", "channel": channel]
         )
 
         if request.useDevServer {
-            guard let metroURL = request.metroBundleURL else {
-                infoLabel.text = "无法构造 Metro URL"
+            guard let pageURL = request.metroPageBundleURL else {
+                infoLabel.text = "无法构造 Metro page URL"
                 return
             }
-            infoLabel.text = """
-            准备连接 Metro:
-            \(metroURL.absoluteString)
-            moduleName=\(key)
-
-            宿主接入后在此创建 RCTRootView(bundleURL: metroURL, moduleName: key, ...)
-            本地请先在 packages/base 执行 yarn start。
-            """
+            let commonURL = request.loadCommon ? request.metroCommonBundleURL : nil
+            presentMounted(pageURL: pageURL, commonURL: commonURL, moduleName: key, props: request.initialProps)
+        } else if let root = configRootURL {
+            // 非 DevServer：按 channel 读配置并正式挂载
+            do {
+                let store = RNBundleConfigStore(configURL: root, channel: request.channel)
+                let host = RNBundleHostViewController(
+                    request: RNOpenBundleRequest(
+                        key: key,
+                        channel: request.channel,
+                        urlOverride: request.bundleURL,
+                        initialProps: request.initialProps
+                    ),
+                    configStore: store,
+                    cache: cache
+                )
+                navigationController?.pushViewController(host, animated: true)
+                    ?? present(UINavigationController(rootViewController: host), animated: true)
+                infoLabel.text = "已打开正式入口 channel=\(request.channel) key=\(key)"
+            } catch {
+                infoLabel.text = "打开失败: \(error.localizedDescription)"
+            }
         } else {
             let url = (request.bundleURL ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !url.isEmpty else {
-                infoLabel.text = "测试模式请填写 Bundle URL"
+            guard !url.isEmpty, let pageURL = URL(string: url) else {
+                infoLabel.text = "测试模式请填写合法 Bundle URL，或提供 configRootURL"
                 return
             }
+            presentMounted(pageURL: pageURL, commonURL: nil, moduleName: key, props: request.initialProps)
+        }
+    }
+
+    private func presentMounted(
+        pageURL: URL,
+        commonURL: URL?,
+        moduleName: String,
+        props: [String: Any]
+    ) {
+        let hostVC = UIViewController()
+        hostVC.view.backgroundColor = .systemBackground
+        hostVC.title = moduleName
+        do {
+            _ = try RNBundleMount.mount(
+                in: hostVC.view,
+                request: RNBundleMountRequest(
+                    moduleName: moduleName,
+                    pageBundleURL: pageURL,
+                    commonBundleURL: commonURL,
+                    initialProperties: props
+                )
+            )
+            navigationController?.pushViewController(hostVC, animated: true)
+                ?? present(UINavigationController(rootViewController: hostVC), animated: true)
             infoLabel.text = """
-            准备加载测试包:
-            url=\(url)
-            moduleName=\(key)
-            建议配合 hash 校验与清缓存按钮验证强制更新。
+            已挂载:
+            common: \(commonURL?.absoluteString ?? "(无)")
+            page: \(pageURL.absoluteString)
+            moduleName=\(moduleName)
             """
+        } catch {
+            infoLabel.text = "挂载失败: \(error.localizedDescription)\npage=\(pageURL.absoluteString)"
         }
     }
 
