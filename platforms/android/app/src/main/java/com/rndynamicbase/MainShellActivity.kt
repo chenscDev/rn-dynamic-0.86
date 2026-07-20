@@ -13,6 +13,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.WindowCompat
 import androidx.fragment.app.Fragment
 import com.rndynamic.loader.AuthSession
+import com.rndynamic.loader.RNAssetBundleHelper
 import com.rndynamic.loader.MockApiService
 import com.rndynamic.loader.RNEntryFragment
 import com.rndynamic.loader.RNRootTabFragment
@@ -33,6 +34,7 @@ class MainShellActivity : AppCompatActivity() {
     private var configPath: String? = null
     private val tabButtons = linkedMapOf<String, LinearLayout>()
     private var currentTabId: String? = null
+    private lateinit var buildChannel: String
     private lateinit var bottomBar: LinearLayout
     private lateinit var fragmentContainer: FrameLayout
     private lateinit var loadingView: View
@@ -42,6 +44,7 @@ class MainShellActivity : AppCompatActivity() {
         WindowCompat.setDecorFitsSystemWindows(window, true)
         AuthSession.init(applicationContext)
 
+        buildChannel = RNAssetBundleHelper.readBuildChannel(applicationContext)
         copyAssetConfigIfNeeded()
         configPath = File(filesDir, "rn-config").absolutePath
 
@@ -97,7 +100,7 @@ class MainShellActivity : AppCompatActivity() {
     private fun loadShellConfig(initialTab: String?) {
         thread(name = "MockShellConfig") {
             try {
-                val config = MockApiService.fetchShellConfig(DEFAULT_CHANNEL)
+                val config = MockApiService.fetchShellConfig(buildChannel)
                 ShellConfigHolder.config = config
                 runOnUiThread {
                     shellConfig = config
@@ -108,7 +111,7 @@ class MainShellActivity : AppCompatActivity() {
                     tabId?.let { switchTab(it) }
                 }
             } catch (error: Exception) {
-                val fallback = ShellConfigStore.fromAssets(this, DEFAULT_CHANNEL).load()
+                val fallback = ShellConfigStore.fromAssets(this, buildChannel).load()
                 ShellConfigHolder.config = fallback
                 runOnUiThread {
                     shellConfig = fallback
@@ -204,7 +207,7 @@ class MainShellActivity : AppCompatActivity() {
     }
 
     private fun copyAssetConfigIfNeeded() {
-        val channel = DEFAULT_CHANNEL
+        val channel = buildChannel
         val baseDir = File(filesDir, "rn-config/channels/$channel")
         if (!baseDir.exists()) {
             baseDir.mkdirs()
@@ -248,6 +251,6 @@ class MainShellActivity : AppCompatActivity() {
 
     companion object {
         const val EXTRA_INITIAL_TAB = "extra_initial_tab"
-        private const val DEFAULT_CHANNEL = "main"
+        private const val DEFAULT_CHANNEL = "master"
     }
 }

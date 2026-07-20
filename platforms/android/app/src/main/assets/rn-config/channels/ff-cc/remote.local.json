@@ -1,0 +1,5 @@
+{
+  "enabled": false,
+  "baseUrl": "http://127.0.0.1:8787",
+  "rnVersion": "0.86.0"
+}

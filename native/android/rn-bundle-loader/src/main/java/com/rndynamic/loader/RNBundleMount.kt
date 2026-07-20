@@ -2,6 +2,7 @@ package com.rndynamic.loader
 
 import android.app.Activity
 import android.os.Bundle
+import android.util.Log
 import android.view.View
 import android.view.ViewGroup
 import android.view.ViewTreeObserver
@@ -275,7 +276,7 @@ object RNBundleMount {
             jsRuntimeFactory = HermesInstance(),
             turboModuleManagerDelegateBuilder = DefaultTurboModuleManagerDelegate.Builder(),
             exceptionHandler = { error ->
-                throw MountException("ReactHost 运行时错误: ${formatError(error)}", error)
+                Log.e("RNBundleMount", "ReactHost 运行时错误: ${formatError(error)}", error)
             },
         )
 

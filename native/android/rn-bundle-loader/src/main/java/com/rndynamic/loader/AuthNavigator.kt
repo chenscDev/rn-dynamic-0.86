@@ -51,7 +51,7 @@ object AuthNavigator {
                             context = context,
                             title = route.bundleTitle ?: route.bundleKey,
                             bundleKey = route.bundleKey,
-                            channel = "main",
+                            channel = RNAssetBundleHelper.readBuildChannel(context),
                         ),
                     )
                     return

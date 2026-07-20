@@ -26,6 +26,10 @@ class RNContainerActivity : AppCompatActivity(), DefaultHardwareBackBtnHandler {
     private lateinit var loadingView: View
     private lateinit var errorView: TextView
 
+    /** mount 线程检查此标志，Activity 销毁时置 true */
+    @Volatile
+    private var isActivityDestroyed = false
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         AuthSession.init(applicationContext)
@@ -102,13 +106,19 @@ class RNContainerActivity : AppCompatActivity(), DefaultHardwareBackBtnHandler {
         thread(name = "RNContainerMount") {
             try {
                 val request = buildMountRequest()
+                if (isActivityDestroyed) return@thread
                 RNBundleMount.mount(this, rnContainer, request)
+                if (isActivityDestroyed) return@thread
                 runOnUiThread {
-                    loadingView.visibility = View.GONE
-                    RNBundleMount.forwardOnHostResume(this)
+                    if (!isFinishing && !isDestroyed) {
+                        loadingView.visibility = View.GONE
+                        RNBundleMount.forwardOnHostResume(this)
+                    }
                 }
             } catch (error: Exception) {
+                if (isActivityDestroyed) return@thread
                 runOnUiThread {
+                    if (isFinishing || isDestroyed) return@runOnUiThread
                     if (isLoginContainer()) {
                         startActivity(
                             LoginActivity.intentForFallback(
@@ -181,7 +191,7 @@ class RNContainerActivity : AppCompatActivity(), DefaultHardwareBackBtnHandler {
     private fun buildLoginMountRequest(channel: String, props: Bundle): RNBundleMount.Request {
         val resolved = RNBundleResolver.resolve(
             context = this,
-            channel = channel.ifBlank { "main" },
+            channel = channel.ifBlank { RNAssetBundleHelper.readBuildChannel(this) },
             bundleKey = "login",
             cacheDir = File(cacheDir, "RNDynamicBundles"),
         )
@@ -201,7 +211,7 @@ class RNContainerActivity : AppCompatActivity(), DefaultHardwareBackBtnHandler {
         }
         val resolved = RNBundleResolver.resolve(
             context = this,
-            channel = channel.ifBlank { "main" },
+            channel = channel.ifBlank { RNAssetBundleHelper.readBuildChannel(this) },
             bundleKey = bundleKey,
             cacheDir = File(cacheDir, "RNDynamicBundles"),
         )
@@ -225,6 +235,7 @@ class RNContainerActivity : AppCompatActivity(), DefaultHardwareBackBtnHandler {
     }
 
     override fun onDestroy() {
+        isActivityDestroyed = true
         RNBundleMount.forwardOnHostDestroy(this)
         super.onDestroy()
     }
@@ -311,15 +322,16 @@ class RNContainerActivity : AppCompatActivity(), DefaultHardwareBackBtnHandler {
         /** 登录专用 RN 容器（内置 login 分包） */
         fun intentForLogin(
             context: Context,
-            channel: String = "main",
+            channel: String? = null,
             reason: String? = null,
         ): Intent {
+            val resolvedChannel = channel ?: RNAssetBundleHelper.readBuildChannel(context)
             return Intent(context, RNContainerActivity::class.java).apply {
                 putExtra(EXTRA_MODE, MODE_BUNDLE_KEY)
                 putExtra(EXTRA_CONTAINER_KIND, CONTAINER_KIND_LOGIN)
                 putExtra(EXTRA_TITLE, "登录")
                 putExtra(EXTRA_BUNDLE_KEY, "login")
-                putExtra(EXTRA_CHANNEL, channel)
+                putExtra(EXTRA_CHANNEL, resolvedChannel)
                 putExtra(EXTRA_FROM_NATIVE, "auth-gate")
                 putExtra(EXTRA_CONFIG_PATH, "assets")
                 reason?.let { putExtra(AuthNavigator.EXTRA_LOGIN_REASON, it) }

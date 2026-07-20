@@ -4,9 +4,30 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 RN_BIZ_ROOT="${RN_BIZ_ROOT:-$ROOT/../rn-biz-0.86}"
-CHANNEL="${RN_PACK_CHANNEL:-main}"
 PLATFORM="android"
 RN_VERSION="0.86.0"
+
+# 计算打包 channel：
+# 1) 显式传 RN_PACK_CHANNEL 时优先使用
+# 2) 否则默认取当前 git 分支名（detached HEAD 回退 master）
+resolve_channel() {
+  if [[ -n "${RN_PACK_CHANNEL:-}" ]]; then
+    echo "$RN_PACK_CHANNEL"
+    return 0
+  fi
+
+  local branch
+  branch="$(git -C "$ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+  if [[ -z "$branch" || "$branch" == "HEAD" ]]; then
+    echo "master"
+    return 0
+  fi
+
+  # 分支名可能包含 '/'，目录名与配置文件名统一替换为 '-'
+  echo "${branch//\//-}"
+}
+
+CHANNEL="$(resolve_channel)"
 
 # 与 MockApiService.allEntries 保持一致
 PAGE_KEYS=(login home order demo profile wallet message)
@@ -215,6 +236,10 @@ fs.writeFileSync(
 
 console.log('==> bundles.local.json 已生成，包含:', Object.keys(bundles).join(', '));
 NODE
+
+# 写入打包 channel 标识，原生端启动时读取
+echo -n "$CHANNEL" > "$ASSETS_ROOT/rn-config/build-channel.txt"
+echo "==> build-channel.txt = $CHANNEL"
 
 echo "==> 已写入 assets:"
 echo "    common: $COMMON_ASSETS_URL (hash=$COMMON_HASH)"

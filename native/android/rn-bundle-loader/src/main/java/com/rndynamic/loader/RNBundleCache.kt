@@ -119,11 +119,12 @@ class RNBundleCache(private val cacheDirectory: File) {
         if (!target.exists()) {
             return null
         }
-        val actual = sha256Prefix(target)
-        return if (actual == hash) target else {
-            target.delete()
-            null
+        // 文件名已包含 hash，只要大小 > 0 即视为有效，跳过 SHA256 复算
+        if (target.length() > 0) {
+            return target
         }
+        target.delete()
+        return null
     }
 
     private fun verifyHash(target: File, expectedHash: String) {

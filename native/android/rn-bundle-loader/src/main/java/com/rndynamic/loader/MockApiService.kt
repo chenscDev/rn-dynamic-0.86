@@ -36,7 +36,7 @@ object MockApiService {
 
     /** 模拟 GET /api/shell/config — 每次随机展示部分 RN 入口 */
     @Throws(InterruptedException::class)
-    fun fetchShellConfig(channel: String = "main"): ShellConfigFile {
+    fun fetchShellConfig(channel: String = "master"): ShellConfigFile {
         Thread.sleep(400)
         val shuffled = allEntries.shuffled(Random(System.currentTimeMillis()))
         val bizEntries = JSONArray()

@@ -7,7 +7,18 @@ import java.io.File
  * 从 APK assets 拷贝 RN 配置与内置分包元数据
  */
 object RNAssetBundleHelper {
-    private const val DEFAULT_CHANNEL = "main"
+    private const val DEFAULT_CHANNEL = "master"
+
+    /** 读取打包脚本写入 assets 的 channel 标识，fallback 为 master */
+    fun readBuildChannel(context: Context): String {
+        return try {
+            context.assets.open("rn-config/build-channel.txt")
+                .bufferedReader().readText().trim()
+                .ifBlank { DEFAULT_CHANNEL }
+        } catch (_: Exception) {
+            DEFAULT_CHANNEL
+        }
+    }
 
     fun ensureChannelConfig(
         context: Context,
