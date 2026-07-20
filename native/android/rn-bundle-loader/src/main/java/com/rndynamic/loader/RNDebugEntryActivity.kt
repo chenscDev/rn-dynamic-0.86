@@ -46,8 +46,8 @@ class RNDebugEntryActivity : AppCompatActivity() {
             minHeight = dp(48)
         }
         val channelField = EditText(this).apply {
-            hint = "channel（分支）"
-            setText("main")
+            hint = "channel（分支，Metro 可填 master）"
+            setText("master")
             minHeight = dp(48)
         }
         val urlField = EditText(this).apply {
@@ -84,16 +84,31 @@ class RNDebugEntryActivity : AppCompatActivity() {
             info.text = """
                 模式: $mode
                 platform: android（宿主标识）
-                channel: 发测/正式拉 CDN；Metro 用当前工作区
+                channel: Metro 调试填 git 分支（如 master）；CDN 发测再填对应 channel
+                连手机热点时 Host 填电脑在热点网段的 IP（非 192.168.1.x）
                 CDN: rn/0.86.0/{channel}/{key}/android/...
             """.trimIndent()
+        }
+
+        fun formatError(error: Throwable): String {
+            val parts = mutableListOf<String>()
+            var current: Throwable? = error
+            var depth = 0
+            while (current != null && depth < 6) {
+                current.message?.trim()?.takeIf { it.isNotEmpty() }?.let { parts.add(it) }
+                val next = current.cause
+                if (next == null || next === current) break
+                current = next
+                depth++
+            }
+            return parts.distinct().joinToString(" → ").ifBlank { error.javaClass.simpleName }
         }
 
         openButton.setOnClickListener {
             refreshInfo()
             val key = keyField.text.toString().trim()
             val channel = RNBundleConfigStore.normalizeChannel(
-                channelField.text.toString().ifBlank { "main" },
+                channelField.text.toString().ifBlank { "master" },
             )
             if (key.isEmpty()) {
                 Toast.makeText(this, "请填写分包 key", Toast.LENGTH_SHORT).show()
@@ -142,12 +157,12 @@ class RNDebugEntryActivity : AppCompatActivity() {
                                     info.text =
                                         "已挂载 Metro channel=$channel\ncommon=$commonUrl\npage=$pageUrl"
                                 } catch (error: Exception) {
-                                    info.text = "挂载失败: ${error.message}"
+                                    info.text = "挂载失败: ${formatError(error)}"
                                 }
                             }
                         } catch (error: Exception) {
                             runOnUiThread {
-                                info.text = "挂载失败: ${error.message}"
+                                info.text = "挂载失败: ${formatError(error)}"
                             }
                         }
                     }.start()
@@ -176,18 +191,18 @@ class RNDebugEntryActivity : AppCompatActivity() {
                                     )
                                     info.text = "已挂载测试包 channel=$channel\nurl=$url"
                                 } catch (error: Exception) {
-                                    info.text = "挂载失败: ${error.message}"
+                                    info.text = "挂载失败: ${formatError(error)}"
                                 }
                             }
                         } catch (error: Exception) {
                             runOnUiThread {
-                                info.text = "挂载失败: ${error.message}"
+                                info.text = "挂载失败: ${formatError(error)}"
                             }
                         }
                     }.start()
                 }
             } catch (error: Exception) {
-                info.text = "挂载失败: ${error.message}"
+                info.text = "挂载失败: ${formatError(error)}"
             }
         }
 

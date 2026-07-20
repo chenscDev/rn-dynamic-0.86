@@ -54,8 +54,26 @@ object RNBundleMount {
                 error,
             )
         } catch (error: Exception) {
-            throw MountException("挂载 RN 失败: ${error.message}", error)
+            throw MountException("挂载 RN 失败: ${formatError(error)}", error)
         }
+    }
+
+    /** 展开反射/嵌套异常，避免界面只显示 null */
+    private fun formatError(error: Throwable): String {
+        val parts = mutableListOf<String>()
+        var current: Throwable? = error
+        var depth = 0
+        while (current != null && depth < 6) {
+            val msg = current.message?.trim()
+            if (!msg.isNullOrEmpty()) {
+                parts.add(msg)
+            }
+            val next = current.cause
+            if (next == null || next === current) break
+            current = next
+            depth++
+        }
+        return parts.distinct().joinToString(" → ").ifBlank { error.javaClass.simpleName }
     }
 
     private fun mountSingle(activity: Activity, container: ViewGroup, request: Request): Any {
@@ -233,18 +251,45 @@ object RNBundleMount {
                 .invoke(builder, jsMainModulePath)
         }
 
-        // 最小 packages（RN 0.86：addPackages，不再有 setPackages）
-        val packages = java.util.ArrayList<Any>()
-        try {
-            val core = Class.forName("com.facebook.react.shell.MainReactPackage").getConstructor().newInstance()
-            packages.add(core)
-        } catch (_: Exception) {
-            // 宿主可自行扩展 package 列表
-        }
+        // autolink 包（navigation / screens / safe-area 等），仅 MainReactPackage 会导致挂载失败
+        val packages = loadAutolinkedPackages(activity)
         builderClass.getMethod("addPackages", java.util.List::class.java).invoke(builder, packages)
 
-        return builderClass.getMethod("build").invoke(builder)
-            ?: throw MountException("ReactInstanceManager.build() 返回 null")
+        return invokeBuild(builder, builderClass)
+    }
+
+    /** 加载宿主 autolink 的全部 ReactPackage */
+    private fun loadAutolinkedPackages(activity: Activity): java.util.ArrayList<Any> {
+        val packages = java.util.ArrayList<Any>()
+        try {
+            val packageListClass = Class.forName("com.facebook.react.PackageList")
+            val packageList = packageListClass
+                .getConstructor(android.app.Application::class.java)
+                .newInstance(activity.application)
+            @Suppress("UNCHECKED_CAST")
+            val linked = packageListClass.getMethod("getPackages").invoke(packageList) as List<Any>
+            packages.addAll(linked)
+        } catch (_: Exception) {
+            try {
+                val core = Class.forName("com.facebook.react.shell.MainReactPackage")
+                    .getConstructor()
+                    .newInstance()
+                packages.add(core)
+            } catch (_: Exception) {
+                // 宿主未集成 RN
+            }
+        }
+        return packages
+    }
+
+    private fun invokeBuild(builder: Any, builderClass: Class<*>): Any {
+        return try {
+            builderClass.getMethod("build").invoke(builder)
+                ?: throw MountException("ReactInstanceManager.build() 返回 null")
+        } catch (error: java.lang.reflect.InvocationTargetException) {
+            val target = error.targetException ?: error
+            throw MountException("ReactInstanceManager 构建失败: ${formatError(target)}", target)
+        }
     }
 
     /**
