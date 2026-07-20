@@ -20,6 +20,15 @@ OUT_APK="$OUT_DIR/RnDynamicBase-internal-release.apk"
 
 echo "==> 仓库: $ROOT"
 
+# --- 登录页 RN 分包打入 APK assets（冷启动无需网络）---
+EMBED_SCRIPT="$ROOT/scripts/embed-login-bundles.sh"
+if [[ -x "$EMBED_SCRIPT" ]]; then
+  echo "==> 嵌入 login + common 分包到 assets..."
+  "$EMBED_SCRIPT"
+else
+  echo "警告: 未找到 $EMBED_SCRIPT，跳过登录分包嵌入"
+fi
+
 # --- Java ---
 # RN Gradle Plugin 要求 toolchain=17；优先 JDK 17，其次 Android Studio JBR
 resolve_java_home() {

@@ -158,6 +158,51 @@ export function normalizeChannel(raw: string): string {
   return safe;
 }
 
+/** Tab 类型：native 原生页；rn-entries 入口宫格；rn-root 整 Tab 挂载单个 RN 分包 */
+export type ShellTabType = 'native' | 'rn-entries' | 'rn-root';
+
+/** RN 入口项（宫格） */
+export interface ShellEntryConfig {
+  /** 对应 bundles 配置中的 key */
+  key: string;
+  /** 展示标题 */
+  title: string;
+  /** 图标：drawable 名（如 ic_tab_home）或 http(s) URL */
+  icon?: string;
+  /** 是否展示，默认 true */
+  visible?: boolean;
+  /** 排序，越小越靠前 */
+  order?: number;
+}
+
+/** 单个 Tab 配置 */
+export interface ShellTabConfig {
+  id: string;
+  title: string;
+  type: ShellTabType;
+  /** type=native 时使用：home | mine 等原生页标识 */
+  nativeKey?: string;
+  /** Tab 图标：drawable 名或 URL */
+  icon?: string;
+  visible?: boolean;
+  order?: number;
+  /** type=rn-entries 时的入口列表 */
+  entries?: ShellEntryConfig[];
+  /** type=rn-root 时直接挂载的分包 key */
+  bundleKey?: string;
+}
+
+/**
+ * Shell 导航配置（与 bundles.local.json 分离）
+ * 路径约定：project/config/channels/<channel>/shell.local.json
+ */
+export interface ShellConfigFile {
+  rnVersion: string;
+  channel: string;
+  updatedAt: string;
+  tabs: ShellTabConfig[];
+}
+
 /** 上传配置（config/upload.local.json） */
 export interface UploadLocalConfig {
   /** local：拷贝到本地 CDN 模拟目录；cdn：预留真实 CDN */

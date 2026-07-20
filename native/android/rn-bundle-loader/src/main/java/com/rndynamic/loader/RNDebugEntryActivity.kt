@@ -4,7 +4,6 @@ import android.os.Bundle
 import android.view.View
 import android.widget.Button
 import android.widget.EditText
-import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.Switch
 import android.widget.TextView
@@ -26,6 +25,12 @@ import java.io.File
 class RNDebugEntryActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        AuthSession.init(applicationContext)
+        if (!AuthSession.isLoggedIn()) {
+            AuthNavigator.openLogin(this)
+            finish()
+            return
+        }
         // 避免内容顶到状态栏，保证顶部输入框可点
         WindowCompat.setDecorFitsSystemWindows(window, true)
 
@@ -60,7 +65,7 @@ class RNDebugEntryActivity : AppCompatActivity() {
             minHeight = dp(48)
         }
         val commonSwitch = Switch(this).apply {
-            text = "加载 common"
+            text = "预拉取 common（Metro 挂载仍用 page 全量包）"
             isChecked = true
             minHeight = dp(48)
         }
@@ -71,13 +76,6 @@ class RNDebugEntryActivity : AppCompatActivity() {
 
         val openButton = Button(this).apply { text = "打开分包" }
         val clearButton = Button(this).apply { text = "清除本地分包缓存" }
-        val mountContainer = FrameLayout(this).apply {
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                0,
-                1f,
-            )
-        }
 
         fun refreshInfo() {
             val mode = if (devSwitch.isChecked) "本地 Metro（双包）" else "测试包 / channel CDN"
@@ -104,7 +102,36 @@ class RNDebugEntryActivity : AppCompatActivity() {
             return parts.distinct().joinToString(" → ").ifBlank { error.javaClass.simpleName }
         }
 
+        fun openMountActivity(
+            moduleName: String,
+            channel: String,
+            pageLocal: String,
+            commonLocal: String?,
+            pageUrl: String,
+            commonUrl: String?,
+        ) {
+            startActivity(
+                RNContainerActivity.intentForLocalPaths(
+                    context = this,
+                    title = moduleName,
+                    moduleName = moduleName,
+                    pagePath = pageLocal,
+                    commonPath = commonLocal,
+                    channel = channel,
+                    fromNative = "debug-entry",
+                ),
+            )
+            openButton.isEnabled = true
+            clearButton.isEnabled = true
+            info.text = buildString {
+                append("已打开 RN 容器 channel=$channel\n")
+                append("common=${commonUrl ?: "(无)"}\n")
+                append("page=$pageUrl")
+            }
+        }
+
         openButton.setOnClickListener {
+            if (!openButton.isEnabled) return@setOnClickListener
             refreshInfo()
             val key = keyField.text.toString().trim()
             val channel = RNBundleConfigStore.normalizeChannel(
@@ -119,10 +146,6 @@ class RNDebugEntryActivity : AppCompatActivity() {
                 return@setOnClickListener
             }
             val port = portField.text.toString().toIntOrNull() ?: 8081
-            val props = Bundle().apply {
-                putString("fromNative", "debug-entry")
-                putString("channel", channel)
-            }
 
             try {
                 if (devSwitch.isChecked) {
@@ -133,35 +156,30 @@ class RNDebugEntryActivity : AppCompatActivity() {
                         } else {
                             null
                         }
-                    mountContainer.removeAllViews()
+                    openButton.isEnabled = false
+                    clearButton.isEnabled = false
                     info.text = "正在从 Metro 拉取 bundle…"
-                    // 网络下载放后台，挂载回主线程，避免 NetworkOnMainThread / ANR
                     Thread {
                         try {
-                            val pageLocal = RNBundleMount.resolveToLocalFile(this, pageUrl)
-                            val commonLocal = commonUrl?.let {
-                                RNBundleMount.resolveToLocalFile(this, it)
-                            }
-                            runOnUiThread {
-                                try {
-                                    RNBundleMount.mount(
-                                        this,
-                                        mountContainer,
-                                        RNBundleMount.Request(
-                                            moduleName = key,
-                                            pageBundlePathOrUrl = pageLocal,
-                                            commonBundlePathOrUrl = commonLocal,
-                                            initialProps = props,
-                                        ),
-                                    )
-                                    info.text =
-                                        "已挂载 Metro channel=$channel\ncommon=$commonUrl\npage=$pageUrl"
-                                } catch (error: Exception) {
-                                    info.text = "挂载失败: ${formatError(error)}"
+                            if (commonUrl != null) {
+                                runOnUiThread { info.text = "正在下载 common bundle…" }
+                                val commonLocal = RNBundleMount.resolveToLocalFile(this, commonUrl)
+                                runOnUiThread { info.text = "正在下载 page bundle…" }
+                                val pageLocal = RNBundleMount.resolveToLocalFile(this, pageUrl)
+                                runOnUiThread {
+                                    openMountActivity(key, channel, pageLocal, commonLocal, pageUrl, commonUrl)
+                                }
+                            } else {
+                                runOnUiThread { info.text = "正在下载 page bundle…" }
+                                val pageLocal = RNBundleMount.resolveToLocalFile(this, pageUrl)
+                                runOnUiThread {
+                                    openMountActivity(key, channel, pageLocal, null, pageUrl, null)
                                 }
                             }
                         } catch (error: Exception) {
                             runOnUiThread {
+                                openButton.isEnabled = true
+                                clearButton.isEnabled = true
                                 info.text = "挂载失败: ${formatError(error)}"
                             }
                         }
@@ -172,30 +190,20 @@ class RNDebugEntryActivity : AppCompatActivity() {
                         Toast.makeText(this, "请填写测试 Bundle URL", Toast.LENGTH_SHORT).show()
                         return@setOnClickListener
                     }
-                    mountContainer.removeAllViews()
+                    openButton.isEnabled = false
+                    clearButton.isEnabled = false
                     info.text = "正在准备 Bundle…"
                     Thread {
                         try {
+                            runOnUiThread { info.text = "正在下载测试 bundle…" }
                             val local = RNBundleMount.resolveToLocalFile(this, url)
                             runOnUiThread {
-                                try {
-                                    RNBundleMount.mount(
-                                        this,
-                                        mountContainer,
-                                        RNBundleMount.Request(
-                                            moduleName = key,
-                                            pageBundlePathOrUrl = local,
-                                            commonBundlePathOrUrl = null,
-                                            initialProps = props,
-                                        ),
-                                    )
-                                    info.text = "已挂载测试包 channel=$channel\nurl=$url"
-                                } catch (error: Exception) {
-                                    info.text = "挂载失败: ${formatError(error)}"
-                                }
+                                openMountActivity(key, channel, local, null, url, null)
                             }
                         } catch (error: Exception) {
                             runOnUiThread {
+                                openButton.isEnabled = true
+                                clearButton.isEnabled = true
                                 info.text = "挂载失败: ${formatError(error)}"
                             }
                         }
@@ -231,7 +239,6 @@ class RNDebugEntryActivity : AppCompatActivity() {
             addView(openButton)
             addView(clearButton)
             addView(info)
-            addView(mountContainer)
         }
 
         setContentView(root)

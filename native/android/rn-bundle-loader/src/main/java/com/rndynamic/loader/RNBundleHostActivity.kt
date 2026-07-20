@@ -3,15 +3,17 @@ package com.rndynamic.loader
 import android.os.Bundle
 import android.widget.FrameLayout
 import android.widget.TextView
+import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
 import java.io.File
+import com.facebook.react.modules.core.DefaultHardwareBackBtnHandler
 import kotlin.concurrent.thread
 
 /**
  * 正式入口：整页打开某个分包（Mode A）
  * 按 dependsOn 先解析 common，再挂载 page。
  */
-class RNBundleHostActivity : AppCompatActivity() {
+class RNBundleHostActivity : AppCompatActivity(), DefaultHardwareBackBtnHandler {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -37,6 +39,17 @@ class RNBundleHostActivity : AppCompatActivity() {
             status.text = "缺少 EXTRA_KEY"
             return
         }
+
+        onBackPressedDispatcher.addCallback(
+            this,
+            object : OnBackPressedCallback(true) {
+                override fun handleOnBackPressed() {
+                    if (!RNBundleMount.forwardOnBackPressed(this@RNBundleHostActivity)) {
+                        finish()
+                    }
+                }
+            },
+        )
 
         thread {
             try {
@@ -65,42 +78,54 @@ class RNBundleHostActivity : AppCompatActivity() {
                 }
 
                 runOnUiThread {
-                    try {
-                        container.removeAllViews()
-                        RNBundleMount.mount(
-                            this,
-                            container,
-                            RNBundleMount.Request(
-                                moduleName = pageItem.moduleName,
-                                pageBundlePathOrUrl = pageFile.absolutePath,
-                                commonBundlePathOrUrl = commonPath,
-                                initialProps = props,
-                            ),
-                        )
-                    } catch (error: Exception) {
-                        container.removeAllViews()
-                        container.addView(
-                            TextView(this).apply {
-                                text = """
-                                    分包已就绪，挂载失败:
-                                    ${error.message}
-                                    channel=$channel
-                                    key=${pageItem.key}
-                                    hash=${pageItem.hash}
-                                    page=${pageFile.absolutePath}
-                                    common=${commonPath ?: "(无)"}
-                                """.trimIndent()
-                                setPadding(48, 48, 48, 48)
-                            },
-                        )
-                    }
+                    status.text = "正在挂载 RN…"
+                }
+
+                RNBundleMount.mount(
+                    this,
+                    container,
+                    RNBundleMount.Request(
+                        moduleName = pageItem.moduleName,
+                        pageBundlePathOrUrl = pageFile.absolutePath,
+                        commonBundlePathOrUrl = commonPath,
+                        initialProps = props,
+                    ),
+                )
+
+                runOnUiThread {
+                    status.visibility = android.view.View.GONE
                 }
             } catch (error: Exception) {
                 runOnUiThread {
-                    status.text = "加载失败: ${error.message}"
+                    container.removeAllViews()
+                    container.addView(
+                        TextView(this).apply {
+                            text = "加载失败: ${error.message}"
+                            setPadding(48, 48, 48, 48)
+                        },
+                    )
                 }
             }
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        RNBundleMount.forwardOnHostResume(this)
+    }
+
+    override fun onPause() {
+        RNBundleMount.forwardOnHostPause(this)
+        super.onPause()
+    }
+
+    override fun onDestroy() {
+        RNBundleMount.forwardOnHostDestroy(this)
+        super.onDestroy()
+    }
+
+    override fun invokeDefaultOnBackPressed() {
+        finish()
     }
 
     companion object {

@@ -2,6 +2,7 @@ package com.rndynamic.loader
 
 import java.io.File
 import java.io.FileInputStream
+import java.io.InputStream
 import java.net.HttpURLConnection
 import java.net.URI
 import java.security.MessageDigest
@@ -22,55 +23,135 @@ class RNBundleCache(private val cacheDirectory: File) {
         return File(File(cacheDirectory, key), "$key.$platform.$hash.bundle")
     }
 
-    fun resolveBundleFile(item: RNBundleItem): File {
+    fun resolveBundleFile(
+        item: RNBundleItem,
+        assetOpener: ((String) -> InputStream)? = null,
+        preferRemote: Boolean = true,
+        assetsFallbackItem: RNBundleItem? = null,
+    ): File {
         val platform = item.platform.ifBlank { "android" }
-        val target = localFile(item.key, item.hash, platform)
-        if (target.exists()) {
-            val actual = sha256Prefix(target)
-            if (actual == item.hash) {
-                return target
+        findCachedFile(item.key, item.hash, platform)?.let { return it }
+        assetsFallbackItem?.hash?.let { fallbackHash ->
+            if (fallbackHash != item.hash) {
+                findCachedFile(item.key, fallbackHash, platform)?.let { return it }
             }
-            target.delete()
         }
 
         val keyDir = File(cacheDirectory, item.key)
         if (!keyDir.exists() && !keyDir.mkdirs()) {
             throw RNBundleCacheException("无法创建分包缓存目录: ${keyDir.absolutePath}")
         }
-        // 清理同平台旧 bundle
         keyDir.listFiles()?.forEach { file ->
             if (file.name.contains(".$platform.") && file.name.endsWith(".bundle")) {
                 file.delete()
             }
         }
 
-        val source = item.url
-        try {
-            when {
-                source.startsWith("file://") -> {
-                    val path = URI(source).path
-                    File(path).copyTo(target, overwrite = true)
+        val errors = mutableListOf<String>()
+
+        if (preferRemote && isRemoteUrl(item.url)) {
+            val target = localFile(item.key, item.hash, platform)
+            try {
+                copyFromUrl(item.url, target)
+                verifyHash(target, item.hash)
+                return target
+            } catch (error: Exception) {
+                errors.add("remote(${item.url}): ${error.message}")
+                if (target.exists()) {
+                    target.delete()
                 }
-                source.startsWith("/") -> {
-                    File(source).copyTo(target, overwrite = true)
-                }
-                source.startsWith("http://") || source.startsWith("https://") -> {
-                    download(source, target)
-                }
-                else -> throw RNBundleCacheException("非法分包地址: $source")
             }
-        } catch (error: RNBundleCacheException) {
-            throw error
-        } catch (error: Exception) {
-            throw RNBundleCacheException("下载/拷贝分包失败: ${error.message}")
         }
 
-        val actual = sha256Prefix(target)
-        if (actual != item.hash) {
-            target.delete()
-            throw RNBundleCacheException("分包 hash 不匹配 expected=${item.hash} actual=$actual")
+        val assetsPath = item.assetsUrl?.trim().orEmpty()
+        if (assetsPath.isNotEmpty() && assetOpener != null) {
+            val assetsHash = assetsFallbackItem?.hash ?: item.hash
+            val assetsTarget = localFile(item.key, assetsHash, platform)
+            try {
+                assetOpener(assetsPath).use { input ->
+                    assetsTarget.outputStream().use { output -> input.copyTo(output) }
+                }
+                verifyHash(assetsTarget, assetsHash)
+                return assetsTarget
+            } catch (error: Exception) {
+                errors.add("assets($assetsPath): ${error.message}")
+                if (assetsTarget.exists()) {
+                    assetsTarget.delete()
+                }
+            }
         }
-        return target
+
+        if (!preferRemote && isRemoteUrl(item.url)) {
+            val target = localFile(item.key, item.hash, platform)
+            try {
+                copyFromUrl(item.url, target)
+                verifyHash(target, item.hash)
+                return target
+            } catch (error: Exception) {
+                errors.add("remote-retry(${item.url}): ${error.message}")
+                if (target.exists()) {
+                    target.delete()
+                }
+            }
+        }
+
+        if (!isRemoteUrl(item.url) && item.url.isNotBlank() && !item.url.startsWith("embedded://")) {
+            val target = localFile(item.key, item.hash, platform)
+            try {
+                copyFromUrl(item.url, target)
+                verifyHash(target, item.hash)
+                return target
+            } catch (error: Exception) {
+                errors.add("local(${item.url}): ${error.message}")
+                if (target.exists()) {
+                    target.delete()
+                }
+            }
+        }
+
+        throw RNBundleCacheException(
+            "分包 ${item.key} 加载失败: ${errors.joinToString("; ")}",
+        )
+    }
+
+    private fun findCachedFile(key: String, hash: String, platform: String): File? {
+        val target = localFile(key, hash, platform)
+        if (!target.exists()) {
+            return null
+        }
+        val actual = sha256Prefix(target)
+        return if (actual == hash) target else {
+            target.delete()
+            null
+        }
+    }
+
+    private fun verifyHash(target: File, expectedHash: String) {
+        val actual = sha256Prefix(target)
+        if (actual != expectedHash) {
+            target.delete()
+            throw RNBundleCacheException("分包 hash 不匹配 expected=$expectedHash actual=$actual")
+        }
+    }
+
+    private fun isRemoteUrl(source: String): Boolean {
+        return source.startsWith("http://") || source.startsWith("https://")
+    }
+
+    private fun copyFromUrl(source: String, target: File) {
+        when {
+            source.startsWith("file://") -> {
+                val path = URI(source).path
+                File(path).copyTo(target, overwrite = true)
+            }
+            source.startsWith("/") -> {
+                File(source).copyTo(target, overwrite = true)
+            }
+            source.startsWith("http://") || source.startsWith("https://") -> {
+                download(source, target)
+            }
+            else -> throw RNBundleCacheException("非法分包地址: $source")
+        }
     }
 
     /** 预加载：仅下载缓存 */

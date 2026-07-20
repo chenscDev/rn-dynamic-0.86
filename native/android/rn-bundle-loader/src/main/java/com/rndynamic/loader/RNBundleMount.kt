@@ -2,59 +2,342 @@ package com.rndynamic.loader
 
 import android.app.Activity
 import android.os.Bundle
+import android.view.View
 import android.view.ViewGroup
+import android.view.ViewTreeObserver
 import android.widget.FrameLayout
+import com.facebook.react.PackageList
+import com.facebook.react.bridge.JSBundleLoader
+import com.facebook.react.bridge.JSBundleLoaderDelegate
+import com.facebook.react.bridge.UiThreadUtil
+import com.facebook.react.common.annotations.UnstableReactNativeAPI
+import com.facebook.react.defaults.DefaultComponentsRegistry
+import com.facebook.react.defaults.DefaultReactHostDelegate
+import com.facebook.react.defaults.DefaultTurboModuleManagerDelegate
+import com.facebook.react.fabric.ComponentFactory
+import com.facebook.react.interfaces.fabric.ReactSurface
+import com.facebook.react.modules.core.DefaultHardwareBackBtnHandler
+import com.facebook.react.interfaces.TaskInterface
+import com.facebook.react.runtime.ReactHostImpl
+import com.facebook.react.runtime.hermes.HermesInstance
 import java.io.File
 import java.io.FileOutputStream
 import java.net.HttpURLConnection
 import java.net.URI
 import java.net.URL
+import java.util.concurrent.CountDownLatch
 
 /**
- * RN 根视图挂载辅助。
- * 通过反射调用 React Native API，避免 SDK 源码仓在未引入 RN 依赖时无法编译；
- * 宿主工程需已集成 React Native 0.86。
+ * RN 根视图挂载辅助（RN 0.86 Bridgeless / ReactHost）。
  *
- * 注意：RN 0.86 中 Builder / EventListener 已从内部类提升为顶层类，
- * 且 JSBundleLoader.createRemoteBundleLoader 已移除，Metro http URL 需先下载到本地再加载。
+ * Legacy 的 ReactInstanceManager 在 0.86 已不可用，此处为每个分包创建独立 ReactHost + Surface。
  */
+@OptIn(UnstableReactNativeAPI::class)
 object RNBundleMount {
     data class Request(
         val moduleName: String,
         val pageBundlePathOrUrl: String,
         val commonBundlePathOrUrl: String? = null,
+        /**
+         * true：生产分包（先 common 再 split 注入 page）
+         * false：Metro 全量 page bundle，仅加载 page（common 仅预下载校验，不参与挂载）
+         */
+        val useSplitPageBundle: Boolean = true,
         val initialProps: Bundle? = null,
     )
 
     class MountException(message: String, cause: Throwable? = null) : Exception(message, cause)
 
+    /** 挂载后持有 Host，便于 Activity 生命周期转发 */
+    private val activeHostsByActivity = mutableMapOf<Int, ReactHostImpl>()
+
+    /** Activity onResume 时转发给 ReactHost */
+    @JvmStatic
+    fun forwardOnHostResume(activity: Activity) {
+        val host = activeHostsByActivity[activity.hashCode()] ?: return
+        runOnUiThreadSyncFromAnyThread {
+            if (activity is DefaultHardwareBackBtnHandler) {
+                host.onHostResume(activity, activity)
+            } else {
+                host.onHostResume(activity)
+            }
+        }
+    }
+
+    /** Activity onPause 时转发给 ReactHost */
+    @JvmStatic
+    fun forwardOnHostPause(activity: Activity) {
+        val host = activeHostsByActivity[activity.hashCode()] ?: return
+        runOnUiThreadSyncFromAnyThread { host.onHostPause(activity) }
+    }
+
+    /** Activity onDestroy 时转发给 ReactHost */
+    @JvmStatic
+    fun forwardOnHostDestroy(activity: Activity) {
+        val host = activeHostsByActivity.remove(activity.hashCode()) ?: return
+        runOnUiThreadSyncFromAnyThread { host.onHostDestroy(activity) }
+    }
+
     /**
-     * 在 container 中挂载 RN。
-     * - 仅 page：JSBundleFile = page
-     * - common + page：先以 common 建实例，再 loadScriptFromFile(page)
+     * 系统返回键 / 手势返回：转发给 RN（React Navigation 栈内 pop）。
+     * RN 栈顶无法后退时会回调 Activity 的 DefaultHardwareBackBtnHandler。
+     */
+    @JvmStatic
+    fun forwardOnBackPressed(activity: Activity): Boolean {
+        val host = activeHostsByActivity[activity.hashCode()] ?: return false
+        var handled = false
+        runOnUiThreadSyncFromAnyThread {
+            handled = host.onBackPressed()
+        }
+        return handled
+    }
+
+    /**
+     * 在 container 中挂载 RN（必须在后台线程调用，禁止在主线程 waitForCompletion）。
+     * - 仅 page：以 page 为入口 bundle
+     * - common + page：先加载 common，再 loadSplitBundle 注入 page
      */
     @JvmStatic
     fun mount(activity: Activity, container: ViewGroup, request: Request): Any {
+        if (UiThreadUtil.isOnUiThread()) {
+            throw MountException(
+                "mount 不能在主线程调用（会导致 ANR）。请在后台线程执行挂载，仅 UI 更新切回主线程。",
+            )
+        }
+        return mountInternal(activity, container, request)
+    }
+
+    private fun mountInternal(activity: Activity, container: ViewGroup, request: Request): View {
         return try {
-            if (request.commonBundlePathOrUrl.isNullOrBlank()) {
-                mountSingle(activity, container, request)
-            } else {
+            val useDual = !request.commonBundlePathOrUrl.isNullOrBlank() && request.useSplitPageBundle
+            if (useDual) {
                 mountDual(activity, container, request)
+            } else {
+                mountSingle(activity, container, request)
             }
         } catch (error: MountException) {
             throw error
-        } catch (error: ClassNotFoundException) {
-            throw MountException(
-                "宿主未集成 React Native 或 API 不匹配（缺少 ${error.message}）。请引入 RN 0.86 依赖。",
-                error,
-            )
-        } catch (error: NoSuchMethodException) {
-            throw MountException(
-                "RN API 不匹配（缺少方法 ${error.message}）。请确认宿主为 RN 0.86。",
-                error,
-            )
         } catch (error: Exception) {
             throw MountException("挂载 RN 失败: ${formatError(error)}", error)
+        }
+    }
+
+    private fun mountSingle(activity: Activity, container: ViewGroup, request: Request): View {
+        val pageSource = request.pageBundlePathOrUrl
+        val pageLocal = resolveToLocalFile(activity, pageSource)
+        val reactHost = createReactHost(
+            activity = activity,
+            bundlePath = pageLocal,
+            sourceUrl = if (isHttp(pageSource)) pageSource else null,
+            useDevSupport = isHttp(pageSource),
+        )
+        return attachSurface(activity, container, reactHost, request.moduleName, request.initialProps)
+    }
+
+    private fun mountDual(activity: Activity, container: ViewGroup, request: Request): View {
+        val commonSource = request.commonBundlePathOrUrl!!
+        val pageSource = request.pageBundlePathOrUrl
+        val commonLocal = resolveToLocalFile(activity, commonSource)
+        val pageLocal = resolveToLocalFile(activity, pageSource)
+
+        val reactHost = createReactHost(
+            activity = activity,
+            bundlePath = commonLocal,
+            sourceUrl = if (isHttp(commonSource)) commonSource else null,
+            useDevSupport = false,
+        )
+        runOnUiThreadSync {
+            reactHost.onHostResume(activity)
+        }
+        waitForTask(reactHost.start(), "启动 ReactHost")
+
+        loadSplitBundle(
+            reactHost,
+            pageLocal,
+            if (isHttp(pageSource)) pageSource else pageLocal,
+        )
+
+        return attachSurface(activity, container, reactHost, request.moduleName, request.initialProps)
+    }
+
+    private fun attachSurface(
+        activity: Activity,
+        container: ViewGroup,
+        reactHost: ReactHostImpl,
+        moduleName: String,
+        initialProps: Bundle?,
+    ): View {
+        activeHostsByActivity[activity.hashCode()] = reactHost
+        runOnUiThreadSync {
+            if (activity is DefaultHardwareBackBtnHandler) {
+                reactHost.onHostResume(activity, activity)
+            } else {
+                reactHost.onHostResume(activity)
+            }
+        }
+
+        waitForTask(reactHost.start(), "启动 ReactHost")
+
+        val surface: ReactSurface = reactHost.createSurface(activity, moduleName, initialProps)
+        val surfaceView = surface.view
+            ?: throw MountException("ReactSurface 未创建 View")
+
+        // 先 attach 到容器并完成 layout，再 startSurface，避免 Fabric 尺寸为 0 导致白屏
+        runOnUiThreadSync {
+            container.removeAllViews()
+            container.addView(
+                surfaceView,
+                FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                ),
+            )
+        }
+        awaitViewLaidOut(surfaceView)
+
+        waitForTask(surface.start(), "启动 ReactSurface")
+        return surfaceView
+    }
+
+    /** 等待 Surface View 完成首次 layout（后台线程可调） */
+    private fun awaitViewLaidOut(target: View) {
+        if (target.width > 0 && target.height > 0) {
+            return
+        }
+        val latch = CountDownLatch(1)
+        UiThreadUtil.runOnUiThread {
+            if (target.width > 0 && target.height > 0) {
+                latch.countDown()
+                return@runOnUiThread
+            }
+            val observer = target.viewTreeObserver
+            observer.addOnGlobalLayoutListener(
+                object : ViewTreeObserver.OnGlobalLayoutListener {
+                    override fun onGlobalLayout() {
+                        if (target.width > 0 && target.height > 0) {
+                            target.viewTreeObserver.removeOnGlobalLayoutListener(this)
+                            latch.countDown()
+                        }
+                    }
+                },
+            )
+        }
+        latch.await()
+    }
+
+    /** 在 UI 线程执行并等待完成（调用方必须在后台线程） */
+    private fun runOnUiThreadSync(block: () -> Unit) {
+        if (UiThreadUtil.isOnUiThread()) {
+            block()
+            return
+        }
+        val latch = CountDownLatch(1)
+        var error: Exception? = null
+        UiThreadUtil.runOnUiThread {
+            try {
+                block()
+            } catch (e: Exception) {
+                error = e
+            } finally {
+                latch.countDown()
+            }
+        }
+        latch.await()
+        error?.let { throw if (it is MountException) it else MountException(formatError(it), it) }
+    }
+
+    /** 生命周期转发：主线程直接执行，后台线程则 post 后等待 */
+    private fun runOnUiThreadSyncFromAnyThread(block: () -> Unit) {
+        if (UiThreadUtil.isOnUiThread()) {
+            block()
+        } else {
+            runOnUiThreadSync(block)
+        }
+    }
+
+    private fun createReactHost(
+        activity: Activity,
+        bundlePath: String,
+        sourceUrl: String?,
+        useDevSupport: Boolean,
+    ): ReactHostImpl {
+        val packages = HostPackageRegistry.packages(activity.application)
+        val loader = if (!sourceUrl.isNullOrBlank()) {
+            JSBundleLoader.createCachedBundleFromNetworkLoader(sourceUrl, bundlePath)
+        } else {
+            JSBundleLoader.createFileLoader(bundlePath)
+        }
+
+        val delegate = DefaultReactHostDelegate(
+            jsMainModulePath = "index",
+            jsBundleLoader = loader,
+            reactPackages = packages,
+            jsRuntimeFactory = HermesInstance(),
+            turboModuleManagerDelegateBuilder = DefaultTurboModuleManagerDelegate.Builder(),
+            exceptionHandler = { error ->
+                throw MountException("ReactHost 运行时错误: ${formatError(error)}", error)
+            },
+        )
+
+        val componentFactory = ComponentFactory()
+        DefaultComponentsRegistry.register(componentFactory)
+
+        return ReactHostImpl(
+            activity.applicationContext,
+            delegate,
+            componentFactory,
+            allowPackagerServerAccess = true,
+            useDevSupport = useDevSupport,
+        )
+    }
+
+    /** RN 0.86：通过 ReactHostImpl.loadBundle（internal，JVM 名带模块后缀）注入 page 分包 */
+    private fun loadSplitBundle(host: ReactHostImpl, pagePath: String, sourceUrl: String) {
+        val splitLoader = object : JSBundleLoader() {
+            override fun loadScript(delegate: JSBundleLoaderDelegate): String {
+                delegate.loadSplitBundleFromFile(pagePath, sourceUrl)
+                return sourceUrl
+            }
+        }
+        waitForTask(invokeLoadBundle(host, splitLoader), "注入 page bundle")
+    }
+
+    /**
+     * Kotlin internal 方法在 release AAR 中会 mangled 为 loadBundle$ReactAndroid_release，
+     * 不能直接用 "loadBundle" 反射。
+     */
+    private fun invokeLoadBundle(host: ReactHostImpl, loader: JSBundleLoader): TaskInterface<Boolean> {
+        val hostClass = ReactHostImpl::class.java
+        val loaderClass = JSBundleLoader::class.java
+        val method = hostClass.methods.firstOrNull { candidate ->
+            candidate.parameterCount == 1 &&
+                candidate.parameterTypes[0] == loaderClass &&
+                (candidate.name == "loadBundle\$ReactAndroid_release" || candidate.name == "loadBundle")
+        } ?: throw MountException("ReactHost 未找到 loadBundle 方法")
+
+        return try {
+            @Suppress("UNCHECKED_CAST")
+            method.invoke(host, loader) as TaskInterface<Boolean>
+        } catch (error: Exception) {
+            val cause = if (error is java.lang.reflect.InvocationTargetException) {
+                error.targetException ?: error
+            } else {
+                error
+            }
+            throw MountException("调用 loadBundle 失败: ${formatError(cause)}", cause)
+        }
+    }
+
+    private fun waitForTask(task: TaskInterface<*>, label: String) {
+        task.waitForCompletion()
+        when {
+            task.isFaulted() -> {
+                throw MountException(
+                    "$label 失败: ${formatError(task.getError() ?: Exception("未知错误"))}",
+                    task.getError(),
+                )
+            }
+            task.isCancelled() -> throw MountException("$label 已取消")
         }
     }
 
@@ -76,226 +359,8 @@ object RNBundleMount {
         return parts.distinct().joinToString(" → ").ifBlank { error.javaClass.simpleName }
     }
 
-    private fun mountSingle(activity: Activity, container: ViewGroup, request: Request): Any {
-        val reactRootViewClass = Class.forName("com.facebook.react.ReactRootView")
-        val rootView = reactRootViewClass
-            .getConstructor(android.content.Context::class.java)
-            .newInstance(activity)
-
-        val pageSource = request.pageBundlePathOrUrl
-        val pageLocal = resolveToLocalFile(activity, pageSource)
-        val manager = createReactInstanceManager(
-            activity,
-            jsBundleFile = pageLocal,
-            jsMainModulePath = null,
-            useDeveloperSupport = isHttp(pageSource),
-            sourceUrlForLoader = if (isHttp(pageSource)) pageSource else null,
-        )
-
-        startReactApplication(reactRootViewClass, rootView, manager, request.moduleName, request.initialProps)
-        attachRootView(container, rootView)
-        return rootView
-    }
-
-    private fun mountDual(activity: Activity, container: ViewGroup, request: Request): Any {
-        val commonSource = request.commonBundlePathOrUrl!!
-        val pageSource = request.pageBundlePathOrUrl
-        val commonPath = resolveToLocalFile(activity, commonSource)
-        val pagePath = resolveToLocalFile(activity, pageSource)
-
-        val reactRootViewClass = Class.forName("com.facebook.react.ReactRootView")
-        val rootView = reactRootViewClass
-            .getConstructor(android.content.Context::class.java)
-            .newInstance(activity)
-
-        val manager = createReactInstanceManager(
-            activity,
-            jsBundleFile = commonPath,
-            jsMainModulePath = null,
-            useDeveloperSupport = false,
-            sourceUrlForLoader = if (isHttp(commonSource)) commonSource else null,
-        )
-
-        // common 加载完成后注入 page（RN 0.86：顶层 ReactInstanceEventListener）
-        val listenerClass = Class.forName("com.facebook.react.ReactInstanceEventListener")
-        val proxy = java.lang.reflect.Proxy.newProxyInstance(
-            listenerClass.classLoader,
-            arrayOf(listenerClass),
-        ) { _, method, args ->
-            if (method.name == "onReactContextInitialized") {
-                try {
-                    val context = args?.getOrNull(0)
-                    val catalyst = context?.javaClass?.getMethod("getCatalystInstance")?.invoke(context)
-                    catalyst?.javaClass
-                        ?.getMethod(
-                            "loadScriptFromFile",
-                            String::class.java,
-                            String::class.java,
-                            Boolean::class.javaPrimitiveType,
-                        )
-                        ?.invoke(catalyst, pagePath, if (isHttp(pageSource)) pageSource else pagePath, false)
-                } catch (error: Exception) {
-                    throw MountException("注入 page bundle 失败: ${error.message}", error)
-                }
-            }
-            null
-        }
-        manager.javaClass
-            .getMethod("addReactInstanceEventListener", listenerClass)
-            .invoke(manager, proxy)
-
-        startReactApplication(reactRootViewClass, rootView, manager, request.moduleName, request.initialProps)
-        attachRootView(container, rootView)
-        return rootView
-    }
-
-    private fun startReactApplication(
-        reactRootViewClass: Class<*>,
-        rootView: Any,
-        manager: Any,
-        moduleName: String,
-        initialProps: Bundle?,
-    ) {
-        val startMethod = reactRootViewClass.getMethod(
-            "startReactApplication",
-            Class.forName("com.facebook.react.ReactInstanceManager"),
-            String::class.java,
-            Bundle::class.java,
-        )
-        startMethod.invoke(rootView, manager, moduleName, initialProps)
-    }
-
-    private fun attachRootView(container: ViewGroup, rootView: Any) {
-        container.removeAllViews()
-        container.addView(
-            rootView as android.view.View,
-            FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT,
-            ),
-        )
-    }
-
-    private fun createReactInstanceManager(
-        activity: Activity,
-        jsBundleFile: String?,
-        jsMainModulePath: String?,
-        useDeveloperSupport: Boolean,
-        sourceUrlForLoader: String?,
-    ): Any {
-        val rimClass = Class.forName("com.facebook.react.ReactInstanceManager")
-        // RN 0.86：builder() 返回顶层 ReactInstanceManagerBuilder，不再是内部类 Builder
-        val builder = rimClass.getMethod("builder").invoke(null)
-            ?: throw MountException("ReactInstanceManager.builder() 返回 null")
-        val builderClass = builder.javaClass
-
-        builderClass.getMethod("setApplication", android.app.Application::class.java)
-            .invoke(builder, activity.application)
-        builderClass.getMethod("setCurrentActivity", Activity::class.java)
-            .invoke(builder, activity)
-        builderClass.getMethod("setUseDeveloperSupport", Boolean::class.javaPrimitiveType)
-            .invoke(builder, useDeveloperSupport)
-
-        // RN 0.86：build() 要求必须设置 initialLifecycleState
-        val lifecycleClass = Class.forName("com.facebook.react.common.LifecycleState")
-        @Suppress("UNCHECKED_CAST")
-        val resumed = java.lang.Enum.valueOf(
-            lifecycleClass as Class<out Enum<*>>,
-            "RESUMED",
-        )
-        builderClass.getMethod("setInitialLifecycleState", lifecycleClass)
-            .invoke(builder, resumed)
-
-        // 可选：返回键交给 Activity（已 resume 场景更稳妥）
-        try {
-            val backHandlerClass = Class.forName("com.facebook.react.modules.core.DefaultHardwareBackBtnHandler")
-            val proxy = java.lang.reflect.Proxy.newProxyInstance(
-                backHandlerClass.classLoader,
-                arrayOf(backHandlerClass),
-            ) { _, method, _ ->
-                if (method.name == "invokeDefaultOnBackPressed") {
-                    activity.onBackPressed()
-                }
-                null
-            }
-            builderClass.getMethod("setDefaultHardwareBackBtnHandler", backHandlerClass)
-                .invoke(builder, proxy)
-        } catch (_: Exception) {
-            // 宿主未带该接口时忽略
-        }
-
-        if (!jsBundleFile.isNullOrBlank()) {
-            val loaderClass = Class.forName("com.facebook.react.bridge.JSBundleLoader")
-            val loader = if (!sourceUrlForLoader.isNullOrBlank()) {
-                // Metro 下载到本地后，用 network cache loader 保留 sourceURL（堆栈更友好）
-                loaderClass
-                    .getMethod(
-                        "createCachedBundleFromNetworkLoader",
-                        String::class.java,
-                        String::class.java,
-                    )
-                    .invoke(null, sourceUrlForLoader, jsBundleFile)
-            } else {
-                loaderClass
-                    .getMethod("createFileLoader", String::class.java)
-                    .invoke(null, jsBundleFile)
-            }
-            builderClass.getMethod(
-                "setJSBundleLoader",
-                Class.forName("com.facebook.react.bridge.JSBundleLoader"),
-            ).invoke(builder, loader)
-        }
-
-        if (!jsMainModulePath.isNullOrBlank()) {
-            builderClass.getMethod("setJSMainModulePath", String::class.java)
-                .invoke(builder, jsMainModulePath)
-        }
-
-        // autolink 包（navigation / screens / safe-area 等），仅 MainReactPackage 会导致挂载失败
-        val packages = loadAutolinkedPackages(activity)
-        builderClass.getMethod("addPackages", java.util.List::class.java).invoke(builder, packages)
-
-        return invokeBuild(builder, builderClass)
-    }
-
-    /** 加载宿主 autolink 的全部 ReactPackage */
-    private fun loadAutolinkedPackages(activity: Activity): java.util.ArrayList<Any> {
-        val packages = java.util.ArrayList<Any>()
-        try {
-            val packageListClass = Class.forName("com.facebook.react.PackageList")
-            val packageList = packageListClass
-                .getConstructor(android.app.Application::class.java)
-                .newInstance(activity.application)
-            @Suppress("UNCHECKED_CAST")
-            val linked = packageListClass.getMethod("getPackages").invoke(packageList) as List<Any>
-            packages.addAll(linked)
-        } catch (_: Exception) {
-            try {
-                val core = Class.forName("com.facebook.react.shell.MainReactPackage")
-                    .getConstructor()
-                    .newInstance()
-                packages.add(core)
-            } catch (_: Exception) {
-                // 宿主未集成 RN
-            }
-        }
-        return packages
-    }
-
-    private fun invokeBuild(builder: Any, builderClass: Class<*>): Any {
-        return try {
-            builderClass.getMethod("build").invoke(builder)
-                ?: throw MountException("ReactInstanceManager.build() 返回 null")
-        } catch (error: java.lang.reflect.InvocationTargetException) {
-            val target = error.targetException ?: error
-            throw MountException("ReactInstanceManager 构建失败: ${formatError(target)}", target)
-        }
-    }
-
     /**
      * 将 http(s) Metro URL 下载到缓存目录；本地 path / file:// 原样返回。
-     * 可在后台线程预调用，避免主线程网络导致 ANR。
-     * RN 0.86 已移除 createRemoteBundleLoader，必须先落地再加载。
      */
     @JvmStatic
     fun resolveToLocalFile(activity: Activity, pathOrUrl: String): String {
@@ -311,7 +376,7 @@ object RNBundleMount {
             downloadHttpToFile(pathOrUrl, outFile)
         } catch (error: Exception) {
             throw MountException(
-                "下载 Metro bundle 失败: ${error.message}。请确认电脑 yarn start 已启动，且手机能访问 $pathOrUrl",
+                "下载 Metro bundle 失败: ${formatError(error)}。请确认电脑 yarn start 已启动，且手机能访问 $pathOrUrl",
                 error,
             )
         }
@@ -321,7 +386,7 @@ object RNBundleMount {
     private fun downloadHttpToFile(urlString: String, outFile: File) {
         val connection = (URL(urlString).openConnection() as HttpURLConnection).apply {
             connectTimeout = 15_000
-            readTimeout = 60_000
+            readTimeout = 120_000
             instanceFollowRedirects = true
             requestMethod = "GET"
         }

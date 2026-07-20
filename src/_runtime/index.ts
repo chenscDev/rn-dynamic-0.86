@@ -17,3 +17,4 @@ export {
   platformSelect,
 } from './platform';
 export type { AppPlatform } from './platform';
+export { finishNativeContainer } from './navigationBridge';

@@ -3,7 +3,6 @@
  */
 import React, { Component, type ErrorInfo, type ReactNode } from 'react';
 import {
-  SafeAreaView,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -11,6 +10,7 @@ import {
   useColorScheme,
   View,
 } from 'react-native';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
 type ErrorBoundaryProps = {
   children: ReactNode;
@@ -68,23 +68,26 @@ export function PageShell({
 
   return (
     <PageErrorBoundary pageKey={pageKey}>
-      <SafeAreaView
-        style={[styles.root, isDark ? styles.rootDark : styles.rootLight]}>
-        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
-        {title ? (
-          <View style={styles.header}>
-            <Text style={[styles.title, isDark && styles.textLight]}>
-              {title}
-            </Text>
-            <Text style={styles.sub}>分包 key: {pageKey}</Text>
-          </View>
-        ) : null}
-        <ScrollView
-          contentContainerStyle={styles.body}
-          keyboardShouldPersistTaps="handled">
-          {children}
-        </ScrollView>
-      </SafeAreaView>
+      <SafeAreaProvider>
+        <SafeAreaView
+          style={[styles.root, isDark ? styles.rootDark : styles.rootLight]}
+          edges={['top', 'left', 'right', 'bottom']}>
+          <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
+          {title ? (
+            <View style={styles.header}>
+              <Text style={[styles.title, isDark && styles.textLight]}>
+                {title}
+              </Text>
+              <Text style={styles.sub}>分包 key: {pageKey}</Text>
+            </View>
+          ) : null}
+          <ScrollView
+            contentContainerStyle={styles.body}
+            keyboardShouldPersistTaps="handled">
+            {children}
+          </ScrollView>
+        </SafeAreaView>
+      </SafeAreaProvider>
     </PageErrorBoundary>
   );
 }
