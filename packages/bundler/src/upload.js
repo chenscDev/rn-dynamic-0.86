@@ -20,6 +20,21 @@ const path = require('path');
  * @property {object} paths
  */
 
+function normalizeChannel(raw) {
+  const trimmed = String(raw || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\\/g, '/')
+    .replace(/^refs\/heads\//, '');
+  if (!trimmed) return 'main';
+  const safe = trimmed
+    .replace(/[^a-z0-9._/-]+/g, '-')
+    .replace(/\//g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+  return !safe || safe === '.' || safe === '..' ? 'main' : safe;
+}
+
 /**
  * 读取上传配置
  */
@@ -30,7 +45,9 @@ function readUploadConfig(paths) {
       provider: 'local',
       baseUrl: 'http://127.0.0.1:8787',
       targetDir: 'project/dist/cdn-local',
-      pathTemplate: 'rn/{rnVersion}/{key}/{platform}/{fileName}',
+      pathTemplate: 'rn/{rnVersion}/{channel}/{key}/{platform}/{fileName}',
+      keepHistory: 5,
+      defaultChannel: 'main',
       cdn: {},
     };
   }
@@ -139,28 +156,95 @@ async function uploadWithLocal(ctx) {
 }
 
 /**
- * CDN 上传提供方占位：接口已预留，便于后期替换实现
+ * CDN 上传：阿里云 OSS（provider=cdn）
  * @param {UploadProviderContext} ctx
  */
 async function uploadWithCdn(ctx) {
   const cdn = ctx.uploadConfig.cdn || {};
+  const endpoint = cdn.endpoint || process.env.OSS_ENDPOINT;
+  const bucket = cdn.bucket || process.env.OSS_BUCKET;
+  const region = cdn.region || process.env.OSS_REGION;
+  const accessKeyId =
+    process.env[cdn.accessKeyEnv || 'OSS_ACCESS_KEY_ID'] ||
+    process.env.OSS_ACCESS_KEY_ID;
+  const accessKeySecret =
+    process.env[cdn.secretKeyEnv || 'OSS_ACCESS_KEY_SECRET'] ||
+    process.env.OSS_ACCESS_KEY_SECRET;
+
   const missing = [];
-  if (!cdn.endpoint) missing.push('cdn.endpoint');
-  if (!cdn.bucket) missing.push('cdn.bucket');
+  if (!endpoint) missing.push('OSS_ENDPOINT / cdn.endpoint');
+  if (!bucket) missing.push('OSS_BUCKET / cdn.bucket');
+  if (!accessKeyId) missing.push('OSS_ACCESS_KEY_ID');
+  if (!accessKeySecret) missing.push('OSS_ACCESS_KEY_SECRET');
+  if (missing.length) {
+    throw new Error(`OSS 配置不完整，缺少: ${missing.join(', ')}`);
+  }
 
-  const detail = [
-    `provider=cdn 尚未实现真实上传`,
-    `object=${ctx.relativeObjectPath}`,
-    `publicUrl=${ctx.publicUrl}`,
-    `endpoint=${cdn.endpoint || '(空)'}`,
-    `bucket=${cdn.bucket || '(空)'}`,
-    missing.length ? `缺少配置: ${missing.join(', ')}` : null,
-    `请先使用 --provider local，或在 packages/bundler/src/upload.js 的 uploadWithCdn 中接入 SDK`,
-  ]
-    .filter(Boolean)
-    .join('\n  ');
+  let OSS;
+  try {
+    OSS = require('ali-oss');
+  } catch {
+    throw new Error(
+      '未安装 ali-oss，请在 rn-dynamic-0.86 根目录执行: yarn add ali-oss -W',
+    );
+  }
 
-  throw new Error(detail);
+  const client = new OSS({
+    region,
+    endpoint,
+    bucket,
+    accessKeyId,
+    accessKeySecret,
+    secure: true,
+  });
+
+  const objectKey = ctx.relativeObjectPath.replace(/^\/+/, '');
+  await client.put(objectKey, ctx.sourceBundlePath, {
+    headers: {
+      'Cache-Control': 'public, max-age=31536000, immutable',
+      'Content-Type': 'application/javascript',
+    },
+  });
+
+  const manifestKey = path.posix.join(
+    path.posix.dirname(objectKey),
+    'manifest.json',
+  );
+  await client.put(manifestKey, ctx.sourceManifestPath, {
+    headers: { 'Content-Type': 'application/json' },
+  });
+
+  const keepHistory = Number(ctx.uploadConfig.keepHistory || 5);
+  if (keepHistory > 0) {
+    const prefix = path.posix.dirname(objectKey) + '/';
+    const baseNamePrefix = `${ctx.key}.${ctx.platform}.`;
+    try {
+      const list = await client.list({ prefix, 'max-keys': 200 });
+      const bundles = (list.objects || [])
+        .map(obj => obj.name)
+        .filter(name => name.includes(baseNamePrefix) && name.endsWith('.bundle'))
+        .sort()
+        .reverse();
+      const toDelete = bundles.slice(keepHistory);
+      for (const name of toDelete) {
+        await client.delete(name);
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.warn(`[rn-pack] OSS 历史清理跳过: ${message}`);
+    }
+  }
+
+  const publicUrl =
+    ctx.publicUrl ||
+    joinPublicUrl(ctx.uploadConfig.baseUrl, ctx.relativeObjectPath);
+
+  return {
+    provider: 'cdn',
+    objectPath: ctx.relativeObjectPath,
+    publicUrl,
+    localUploadedPath: undefined,
+  };
 }
 
 /**
@@ -212,11 +296,17 @@ async function uploadPackage({
 
   for (const p of platforms) {
     const artifact = resolveBuiltArtifact(paths, key, p);
+    const channel = normalizeChannel(
+      process.env.RN_PACK_CHANNEL ||
+        uploadConfig.defaultChannel ||
+        'main',
+    );
     const relativeObjectPath = renderPathTemplate(
       uploadConfig.pathTemplate ||
-        'rn/{rnVersion}/{key}/{platform}/{fileName}',
+        'rn/{rnVersion}/{channel}/{key}/{platform}/{fileName}',
       {
         rnVersion: artifact.manifest.rnVersion || core.RN_VERSION,
+        channel,
         key,
         platform: p,
         fileName: artifact.manifest.fileName,
@@ -252,6 +342,7 @@ async function uploadPackage({
       url: result.publicUrl,
       hash: artifact.manifest.hash,
       platform: p,
+      channel,
       localPath: existing?.localPath || path.relative(paths.repoRoot, artifact.bundlePath),
       uploadedPath: result.localUploadedPath,
       provider: result.provider,
@@ -313,4 +404,5 @@ module.exports = {
   publishPackage,
   uploadWithLocal,
   uploadWithCdn,
+  normalizeChannel,
 };

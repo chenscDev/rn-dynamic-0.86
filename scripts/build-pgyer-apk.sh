@@ -21,29 +21,68 @@ OUT_APK="$OUT_DIR/RnDynamicBase-internal-release.apk"
 echo "==> 仓库: $ROOT"
 
 # --- Java ---
-# 优先 Android Studio 自带 JBR（本机 /usr/libexec/java_home 可能为空）
-if [[ -z "${JAVA_HOME:-}" ]]; then
-  if [[ -x "/Applications/Android Studio.app/Contents/jbr/Contents/Home/bin/java" ]]; then
-    export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
-  elif [[ -d "/Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home" ]]; then
-    export JAVA_HOME="/Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home"
-  elif /usr/libexec/java_home -v 17 >/dev/null 2>&1; then
-    export JAVA_HOME="$(/usr/libexec/java_home -v 17)"
-  elif /usr/libexec/java_home >/dev/null 2>&1; then
-    export JAVA_HOME="$(/usr/libexec/java_home)"
+# RN Gradle Plugin 要求 toolchain=17；优先 JDK 17，其次 Android Studio JBR
+resolve_java_home() {
+  local candidate
+  # 1) 已显式设置且为 17
+  if [[ -n "${JAVA_HOME:-}" && -x "${JAVA_HOME}/bin/java" ]]; then
+    if "${JAVA_HOME}/bin/java" -version 2>&1 | grep -qE '"1?7[\. "]'; then
+      echo "$JAVA_HOME"
+      return 0
+    fi
   fi
-fi
+  # 2) Homebrew openjdk@17（Intel / Apple Silicon 通用路径）
+  for candidate in \
+    "/usr/local/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home" \
+    "/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home" \
+    "/Library/Java/JavaVirtualMachines/openjdk-17.jdk/Contents/Home" \
+    "/Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home"
+  do
+    if [[ -x "${candidate}/bin/java" ]]; then
+      echo "$candidate"
+      return 0
+    fi
+  done
+  # 3) java_home -v 17
+  if /usr/libexec/java_home -v 17 >/dev/null 2>&1; then
+    /usr/libexec/java_home -v 17
+    return 0
+  fi
+  # 4) 回退 Android Studio JBR（可能是 21，需配合 gradle toolchain 探测）
+  if [[ -x "/Applications/Android Studio.app/Contents/jbr/Contents/Home/bin/java" ]]; then
+    echo "/Applications/Android Studio.app/Contents/jbr/Contents/Home"
+    return 0
+  fi
+  return 1
+}
+
+export JAVA_HOME="$(resolve_java_home || true)"
 
 if [[ -z "${JAVA_HOME:-}" ]] || [[ ! -x "$JAVA_HOME/bin/java" ]]; then
-  echo "错误: 未找到 JDK。"
-  echo "请先安装 Android Studio（自带 JBR），或安装 Temurin 17："
-  echo "  brew install --cask temurin@17"
-  echo "然后设置: export JAVA_HOME=/Applications/Android\\ Studio.app/Contents/jbr/Contents/Home"
+  echo "错误: 未找到 JDK 17。"
+  echo "本机为 Intel Mac 时请用（不要装 aarch64 的 temurin cask）："
+  echo "  brew install openjdk@17"
+  echo "然后重新执行本脚本。"
   exit 1
 fi
 export PATH="$JAVA_HOME/bin:$PATH"
 echo "==> JAVA_HOME=$JAVA_HOME"
 "$JAVA_HOME/bin/java" -version
+
+# 告知 Gradle 本机 JDK 17 安装位置（供 toolchain 匹配 languageVersion=17）
+BREW_JDK17_INTEL="/usr/local/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home"
+BREW_JDK17_ARM="/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home"
+GRADLE_JDK_PATHS=""
+for candidate in "$JAVA_HOME" "$BREW_JDK17_INTEL" "$BREW_JDK17_ARM"; do
+  if [[ -x "${candidate}/bin/java" ]]; then
+    if [[ -z "$GRADLE_JDK_PATHS" ]]; then
+      GRADLE_JDK_PATHS="$candidate"
+    else
+      GRADLE_JDK_PATHS="${GRADLE_JDK_PATHS},${candidate}"
+    fi
+  fi
+done
+export ORG_GRADLE_JAVA_INSTALLATIONS_PATHS="$GRADLE_JDK_PATHS"
 
 # --- Android SDK ---
 if [[ -z "${ANDROID_HOME:-}" ]]; then
@@ -79,12 +118,16 @@ fi
 
 # Pgyer: arm64 only
 ARCH="${RN_PACK_ARCH:-arm64-v8a}"
+INIT_SCRIPT="$ANDROID_DIR/init.aliyun.gradle"
 echo "==> assembleInternalRelease arch=$ARCH"
+echo "==> Gradle 镜像: $INIT_SCRIPT"
 cd "$ANDROID_DIR"
 ./gradlew assembleInternalRelease --no-daemon \
+  -I "$INIT_SCRIPT" \
   -PreactNativeArchitectures="${ARCH}" \
   -Dorg.gradle.java.home="$JAVA_HOME" \
-  -Dorg.gradle.java.installations.auto-download=false
+  -Dorg.gradle.java.installations.auto-download=false \
+  -Dorg.gradle.java.installations.paths="${ORG_GRADLE_JAVA_INSTALLATIONS_PATHS:-$JAVA_HOME}"
 
 SRC_APK="$(ls -1 "$ANDROID_DIR"/app/build/outputs/apk/internal/release/*.apk 2>/dev/null | head -1)"
 if [[ -z "$SRC_APK" || ! -f "$SRC_APK" ]]; then

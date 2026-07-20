@@ -1,0 +1,54 @@
+/**
+ * 国内网络 Gradle 镜像：把 Maven Central / Google / Gradle Plugin Portal
+ * 重写到阿里云，避免 TLS handshake 失败。
+ *
+ * 由 scripts/build-pgyer-apk.sh 通过 -I 自动加载；也可手动：
+ *   ./gradlew -I init.aliyun.gradle assembleInternalRelease
+ */
+def rewriteMirror = { ArtifactRepository repo ->
+  if (!(repo instanceof MavenArtifactRepository)) {
+    return
+  }
+  def url = repo.url?.toString() ?: ''
+  if (url.contains('repo.maven.apache.org/maven2') ||
+      url.contains('repo1.maven.org/maven2')) {
+    repo.setUrl('https://maven.aliyun.com/repository/central/')
+  } else if (url.contains('dl.google.com/dl/android/maven2') ||
+      url.contains('maven.google.com')) {
+    repo.setUrl('https://maven.aliyun.com/repository/google/')
+  } else if (url.contains('plugins.gradle.org/m2')) {
+    repo.setUrl('https://maven.aliyun.com/repository/gradle-plugin/')
+  }
+}
+
+settingsEvaluated { settings ->
+  settings.pluginManagement.repositories.each { rewriteMirror(it) }
+  settings.pluginManagement.repositories.whenObjectAdded { rewriteMirror(it) }
+  // 确保镜像在前
+  settings.pluginManagement.repositories {
+    maven { url 'https://maven.aliyun.com/repository/google' }
+    maven { url 'https://maven.aliyun.com/repository/public' }
+    maven { url 'https://maven.aliyun.com/repository/gradle-plugin' }
+    maven { url 'https://maven.aliyun.com/repository/central' }
+  }
+}
+
+gradle.beforeProject { project ->
+  project.buildscript.repositories.each { rewriteMirror(it) }
+  project.buildscript.repositories.whenObjectAdded { rewriteMirror(it) }
+  project.repositories.each { rewriteMirror(it) }
+  project.repositories.whenObjectAdded { rewriteMirror(it) }
+
+  project.buildscript.repositories {
+    maven { url 'https://maven.aliyun.com/repository/google' }
+    maven { url 'https://maven.aliyun.com/repository/public' }
+    maven { url 'https://maven.aliyun.com/repository/gradle-plugin' }
+    maven { url 'https://maven.aliyun.com/repository/central' }
+  }
+  project.repositories {
+    maven { url 'https://maven.aliyun.com/repository/google' }
+    maven { url 'https://maven.aliyun.com/repository/public' }
+    maven { url 'https://maven.aliyun.com/repository/gradle-plugin' }
+    maven { url 'https://maven.aliyun.com/repository/central' }
+  }
+}

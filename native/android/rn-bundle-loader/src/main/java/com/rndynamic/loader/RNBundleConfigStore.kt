@@ -110,7 +110,8 @@ class RNBundleConfigStore(
     }
 }
 
-private fun JSONObject.nullableString(name: String): String? {
+/** JSON 可选字符串字段解析，同包内配置加载共用 */
+internal fun JSONObject.nullableString(name: String): String? {
     if (!has(name) || isNull(name)) {
         return null
     }
@@ -118,7 +119,8 @@ private fun JSONObject.nullableString(name: String): String? {
     return value.ifEmpty { null }
 }
 
-private fun JSONObject.nullableStringList(name: String): List<String>? {
+/** JSON 可选字符串数组字段解析，同包内配置加载共用 */
+internal fun JSONObject.nullableStringList(name: String): List<String>? {
     if (!has(name) || isNull(name)) {
         return null
     }

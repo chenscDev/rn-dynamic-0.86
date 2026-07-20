@@ -2,12 +2,15 @@
   "provider": "local",
   "baseUrl": "http://127.0.0.1:8787",
   "targetDir": "project/dist/cdn-local",
-  "pathTemplate": "rn/{rnVersion}/{key}/{platform}/{fileName}",
+  "pathTemplate": "rn/{rnVersion}/{channel}/{key}/{platform}/{fileName}",
+  "defaultChannel": "main",
+  "keepHistory": 5,
   "cdn": {
-    "endpoint": "",
-    "bucket": "",
-    "accessKeyEnv": "RN_CDN_ACCESS_KEY",
-    "secretKeyEnv": "RN_CDN_SECRET_KEY",
-    "comment": "后期接入真实 CDN 时填写；当前 provider=cdn 会明确报未实现"
+    "endpoint": "oss-cn-hangzhou.aliyuncs.com",
+    "bucket": "rn-bundles",
+    "region": "oss-cn-hangzhou",
+    "accessKeyEnv": "OSS_ACCESS_KEY_ID",
+    "secretKeyEnv": "OSS_ACCESS_KEY_SECRET",
+    "comment": "provider=cdn 时使用；AK 从环境变量读取"
   }
 }

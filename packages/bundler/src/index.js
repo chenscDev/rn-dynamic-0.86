@@ -14,6 +14,53 @@ const BASE_VERSION = '0.1.0';
 const RESERVED_DIRS = new Set(['_runtime', '_router']);
 
 /**
+ * 规范化 channel（git 分支 → 路径安全）
+ */
+function normalizeChannel(raw) {
+  const trimmed = String(raw || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\\/g, '/')
+    .replace(/^refs\/heads\//, '');
+  if (!trimmed) {
+    return 'main';
+  }
+  const safe = trimmed
+    .replace(/[^a-z0-9._/-]+/g, '-')
+    .replace(/\//g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+  if (!safe || safe === '.' || safe === '..') {
+    throw new Error(`非法 channel: ${raw}`);
+  }
+  return safe;
+}
+
+/**
+ * 解析配置文件路径（支持 channel 维度）
+ */
+function resolveConfigPath(projectDir, channelInput) {
+  const channel = normalizeChannel(
+    channelInput || process.env.RN_PACK_CHANNEL || 'main',
+  );
+  const channelPath = path.join(
+    projectDir,
+    'config',
+    'channels',
+    channel,
+    'bundles.local.json',
+  );
+  if (fs.existsSync(channelPath)) {
+    return channelPath;
+  }
+  const legacyPath = path.join(projectDir, 'config', 'bundles.local.json');
+  if (channel === 'main' && fs.existsSync(legacyPath)) {
+    return legacyPath;
+  }
+  return channelPath;
+}
+
+/**
  * 解析 monorepo 关键路径
  * - repoRoot: 仓库根（也是 RN 工程根）
  * - srcDir: RN 业务页面目录
@@ -26,8 +73,8 @@ function getPaths(fromDir = __dirname) {
   const srcDir = path.join(repoRoot, 'src');
   const projectDir = path.join(repoRoot, 'project');
   const distRoot = path.join(projectDir, 'dist', 'bundles');
-  const configPath = path.join(projectDir, 'config', 'bundles.local.json');
   const uploadConfigPath = path.join(projectDir, 'config', 'upload.local.json');
+  const configPath = resolveConfigPath(projectDir);
 
   return {
     repoRoot,
@@ -193,10 +240,12 @@ function readConfig(configPath) {
  */
 function writeConfig(configPath, config) {
   fs.mkdirSync(path.dirname(configPath), { recursive: true });
+  const channel = normalizeChannel(process.env.RN_PACK_CHANNEL || 'main');
   const next = {
     ...config,
     rnVersion: RN_VERSION,
     baseVersion: BASE_VERSION,
+    channel,
     updatedAt: new Date().toISOString(),
   };
   fs.writeFileSync(configPath, `${JSON.stringify(next, null, 2)}\n`, 'utf8');
@@ -327,6 +376,8 @@ module.exports = {
   buildPackage,
   buildAllPackages,
   normalizePlatforms,
+  normalizeChannel,
+  resolveConfigPath,
   readConfig,
   writeConfig,
   upsertBundleItem,
