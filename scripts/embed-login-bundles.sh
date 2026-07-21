@@ -73,6 +73,27 @@ COMMON_ASSETS_URL="rn-bundles/$CHANNEL/common/$COMMON_NAME"
 mkdir -p "$BUNDLES_ASSETS/common" "$CONFIG_ASSETS"
 cp -f "$COMMON_BUNDLE" "$BUNDLES_ASSETS/common/$COMMON_NAME"
 
+# 同步 shell 配置到当前 channel（优先复制 main，再按需改写 channel 字段）
+SHELL_SRC_MAIN="$ROOT/platforms/android/app/src/main/assets/rn-config/channels/main/shell.local.json"
+SHELL_SRC_PROJECT="$ROOT/project/config/channels/main/shell.local.json"
+SHELL_DEST="$CONFIG_ASSETS/shell.local.json"
+if [[ -f "$SHELL_SRC_MAIN" ]]; then
+  cp -f "$SHELL_SRC_MAIN" "$SHELL_DEST"
+elif [[ -f "$SHELL_SRC_PROJECT" ]]; then
+  cp -f "$SHELL_SRC_PROJECT" "$SHELL_DEST"
+fi
+if [[ -f "$SHELL_DEST" ]]; then
+  node -e "
+    const fs = require('fs');
+    const p = process.argv[1];
+    const channel = process.argv[2];
+    const j = JSON.parse(fs.readFileSync(p, 'utf8'));
+    j.channel = channel;
+    fs.writeFileSync(p, JSON.stringify(j, null, 2) + '\n');
+  " "$SHELL_DEST" "$CHANNEL"
+  echo "==> shell.local.json → channels/$CHANNEL"
+fi
+
 # 打包各业务 page
 declare -a PAGE_META_LINES=()
 for key in "${PAGE_KEYS[@]}"; do

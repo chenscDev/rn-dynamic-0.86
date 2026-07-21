@@ -2,16 +2,16 @@
   "rnVersion": "0.86.0",
   "baseVersion": "0.1.0",
   "channel": "ff-cc",
-  "updatedAt": "2026-07-20T10:17:05.000Z",
+  "updatedAt": "2026-07-21T03:17:46.000Z",
   "bundles": {
     "common": [
       {
         "key": "common",
         "name": "common",
         "componentName": "common",
-        "url": "embedded://rn-bundles/ff-cc/common/common.android.534a6f69007a.bundle",
-        "assetsUrl": "rn-bundles/ff-cc/common/common.android.534a6f69007a.bundle",
-        "hash": "534a6f69007a",
+        "url": "embedded://rn-bundles/ff-cc/common/common.android.eb270503ac38.bundle",
+        "assetsUrl": "rn-bundles/ff-cc/common/common.android.eb270503ac38.bundle",
+        "hash": "eb270503ac38",
         "platform": "android",
         "kind": "common"
       }
@@ -21,9 +21,9 @@
         "key": "login",
         "name": "登录",
         "componentName": "login",
-        "url": "embedded://rn-bundles/ff-cc/login/login.android.0f952c400944.bundle",
-        "assetsUrl": "rn-bundles/ff-cc/login/login.android.0f952c400944.bundle",
-        "hash": "0f952c400944",
+        "url": "embedded://rn-bundles/ff-cc/login/login.android.b7e73ff36bb8.bundle",
+        "assetsUrl": "rn-bundles/ff-cc/login/login.android.b7e73ff36bb8.bundle",
+        "hash": "b7e73ff36bb8",
         "platform": "android",
         "kind": "page",
         "dependsOn": [
@@ -36,9 +36,9 @@
         "key": "home",
         "name": "Home",
         "componentName": "home",
-        "url": "embedded://rn-bundles/ff-cc/home/home.android.4fc1f15dae07.bundle",
-        "assetsUrl": "rn-bundles/ff-cc/home/home.android.4fc1f15dae07.bundle",
-        "hash": "4fc1f15dae07",
+        "url": "embedded://rn-bundles/ff-cc/home/home.android.508c3e9b0185.bundle",
+        "assetsUrl": "rn-bundles/ff-cc/home/home.android.508c3e9b0185.bundle",
+        "hash": "508c3e9b0185",
         "platform": "android",
         "kind": "page",
         "dependsOn": [

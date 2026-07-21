@@ -111,7 +111,17 @@ class MainShellActivity : AppCompatActivity() {
                     tabId?.let { switchTab(it) }
                 }
             } catch (error: Exception) {
-                val fallback = ShellConfigStore.fromAssets(this, buildChannel).load()
+                // Mock 失败时优先读当前 channel 的 shell；缺失则回退 master/main
+                val fallback = runCatching {
+                    ShellConfigStore.fromAssets(this, buildChannel).load()
+                }.recoverCatching {
+                    ShellConfigStore.fromAssets(this, "master").load()
+                }.recoverCatching {
+                    ShellConfigStore.fromAssets(this, "main").load()
+                }.getOrElse {
+                    // 最终兜底：用 Mock 再试一次（同步失败时至少保证有原生壳）
+                    MockApiService.fetchShellConfig(buildChannel)
+                }
                 ShellConfigHolder.config = fallback
                 runOnUiThread {
                     shellConfig = fallback

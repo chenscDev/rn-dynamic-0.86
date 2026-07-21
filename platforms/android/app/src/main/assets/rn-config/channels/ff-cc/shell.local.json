@@ -1,0 +1,49 @@
+{
+  "rnVersion": "0.86.0",
+  "channel": "ff-cc",
+  "updatedAt": "2026-07-20T07:00:00.000Z",
+  "tabs": [
+    {
+      "id": "home",
+      "title": "首页",
+      "type": "native",
+      "nativeKey": "home",
+      "icon": "ic_tab_home",
+      "visible": true,
+      "order": 0
+    },
+    {
+      "id": "biz",
+      "title": "业务",
+      "type": "rn-entries",
+      "icon": "ic_tab_biz",
+      "visible": true,
+      "order": 1,
+      "entries": [
+        {
+          "key": "home",
+          "title": "Home",
+          "icon": "ic_entry_home",
+          "visible": true,
+          "order": 0
+        },
+        {
+          "key": "order",
+          "title": "订单",
+          "icon": "ic_entry_order",
+          "visible": true,
+          "order": 1
+        }
+      ]
+    },
+    {
+      "id": "mine",
+      "title": "我的",
+      "type": "native",
+      "nativeKey": "mine",
+      "icon": "ic_tab_mine",
+      "visible": true,
+      "order": 99
+    }
+  ]
+}

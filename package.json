@@ -19,6 +19,7 @@
     "pack:upload:all": "node packages/bundler/bin/rn-pack.js upload:all",
     "pack:publish": "node packages/bundler/bin/rn-pack.js publish",
     "prepare": "husky",
+    "pack:admin": "node project/pack-admin/server.js",
     "lint:fix": "eslint \"app/**/*.{js,jsx,ts,tsx}\" \"src/**/*.{js,jsx,ts,tsx}\" \"packages/**/*.{js,ts,tsx}\" \"index.js\" --fix",
     "typecheck": "tsc --noEmit"
   },

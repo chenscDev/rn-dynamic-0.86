@@ -51,7 +51,7 @@ function createHeaderBackToNative(tintColor?: string): React.JSX.Element {
     <Pressable
       onPress={finishNativeContainer}
       hitSlop={8}
-      className="px-2 py-1">
+      style={{ paddingHorizontal: 8, paddingVertical: 4 }}>
       <Text style={{ color: tintColor ?? '#007AFF', fontSize: 17 }}>返回</Text>
     </Pressable>
   );

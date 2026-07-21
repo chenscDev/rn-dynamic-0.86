@@ -1,0 +1,36 @@
+{
+  "test": {
+    "label": "测试环境",
+    "provider": "local",
+    "baseUrl": "http://127.0.0.1:8787",
+    "packageName": "RnDynamicBase-test",
+    "rnBizRoot": "../rn-biz-0.86",
+    "platforms": ["android"],
+    "pageKeys": ["login", "home", "order", "demo", "profile", "wallet", "message"],
+    "buildApk": true,
+    "publish": true,
+    "cdn": {
+      "endpoint": "",
+      "bucket": "",
+      "region": "",
+      "comment": "测试环境默认走 local provider"
+    }
+  },
+  "production": {
+    "label": "线上环境",
+    "provider": "cdn",
+    "baseUrl": "https://cdn.rn.example.com",
+    "packageName": "RnDynamicBase",
+    "rnBizRoot": "../rn-biz-0.86",
+    "platforms": ["android"],
+    "pageKeys": ["login", "home", "order", "demo", "profile", "wallet", "message"],
+    "buildApk": true,
+    "publish": true,
+    "cdn": {
+      "endpoint": "oss-cn-hangzhou.aliyuncs.com",
+      "bucket": "rn-bundles",
+      "region": "oss-cn-hangzhou",
+      "comment": "线上 OSS；AK 从环境变量 OSS_ACCESS_KEY_ID / OSS_ACCESS_KEY_SECRET 读取"
+    }
+  }
+}

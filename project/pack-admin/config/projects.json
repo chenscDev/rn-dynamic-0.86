@@ -1,0 +1,88 @@
+{
+  "projects": [
+    {
+      "id": "ff-cc",
+      "name": "ff-cc 功能分支",
+      "branch": "ff-cc",
+      "rnVersion": "0.86.0",
+      "rnBizRoot": "../rn-biz-0.86",
+      "enabled": true,
+      "environments": {
+        "test": {
+          "label": "测试环境",
+          "provider": "local",
+          "baseUrl": "http://127.0.0.1:8787",
+          "packageName": "RnDynamicBase-ff-cc-test",
+          "platforms": ["android"],
+          "pageKeys": ["login", "home", "order", "demo", "profile", "wallet", "message"],
+          "buildApk": true,
+          "publish": true,
+          "cdn": {
+            "endpoint": "",
+            "bucket": "",
+            "region": "",
+            "comment": "测试环境默认走 local provider"
+          }
+        },
+        "production": {
+          "label": "线上环境",
+          "provider": "cdn",
+          "baseUrl": "https://cdn.rn.example.com",
+          "packageName": "RnDynamicBase-ff-cc",
+          "platforms": ["android"],
+          "pageKeys": ["login", "home", "order", "demo", "profile", "wallet", "message"],
+          "buildApk": true,
+          "publish": true,
+          "cdn": {
+            "endpoint": "oss-cn-hangzhou.aliyuncs.com",
+            "bucket": "rn-bundles",
+            "region": "oss-cn-hangzhou",
+            "comment": "线上 OSS；AK 从环境变量读取"
+          }
+        }
+      }
+    },
+    {
+      "id": "master",
+      "name": "master 主线",
+      "branch": "master",
+      "rnVersion": "0.86.0",
+      "rnBizRoot": "../rn-biz-0.86",
+      "enabled": true,
+      "environments": {
+        "test": {
+          "label": "测试环境",
+          "provider": "local",
+          "baseUrl": "http://127.0.0.1:8787",
+          "packageName": "RnDynamicBase-master-test",
+          "platforms": ["android"],
+          "pageKeys": ["login", "home", "order", "demo", "profile", "wallet", "message"],
+          "buildApk": true,
+          "publish": true,
+          "cdn": {
+            "endpoint": "",
+            "bucket": "",
+            "region": "",
+            "comment": "测试环境默认走 local provider"
+          }
+        },
+        "production": {
+          "label": "线上环境",
+          "provider": "cdn",
+          "baseUrl": "https://cdn.rn.example.com",
+          "packageName": "RnDynamicBase-master",
+          "platforms": ["android"],
+          "pageKeys": ["login", "home", "order", "demo", "profile", "wallet", "message"],
+          "buildApk": true,
+          "publish": true,
+          "cdn": {
+            "endpoint": "oss-cn-hangzhou.aliyuncs.com",
+            "bucket": "rn-bundles",
+            "region": "oss-cn-hangzhou",
+            "comment": "线上 OSS；AK 从环境变量读取"
+          }
+        }
+      }
+    }
+  ]
+}

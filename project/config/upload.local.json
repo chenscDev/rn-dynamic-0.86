@@ -3,7 +3,7 @@
   "baseUrl": "http://127.0.0.1:8787",
   "targetDir": "project/dist/cdn-local",
   "pathTemplate": "rn/{rnVersion}/{channel}/{key}/{platform}/{fileName}",
-  "defaultChannel": "main",
+  "defaultChannel": "master",
   "keepHistory": 5,
   "cdn": {
     "endpoint": "oss-cn-hangzhou.aliyuncs.com",

@@ -1,5 +1,5 @@
 /**
- * 分包页面通用根组件包装：提供安全区与错误边界
+ * 分包页面通用根组件：基础布局用 StyleSheet 保证真机可见
  */
 import React, { Component, type ErrorInfo, type ReactNode } from 'react';
 import {
@@ -10,7 +10,7 @@ import {
   useColorScheme,
   View,
 } from 'react-native';
-import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 type ErrorBoundaryProps = {
   children: ReactNode;
@@ -32,7 +32,6 @@ class PageErrorBoundary extends Component<
   }
 
   componentDidCatch(error: Error, info: ErrorInfo): void {
-    // 预留：可上报到原生日志通道
     console.error(`[rn-dynamic] page=${this.props.pageKey}`, error, info);
   }
 
@@ -41,7 +40,7 @@ class PageErrorBoundary extends Component<
       return (
         <View style={styles.errorBox}>
           <Text style={styles.errorTitle}>页面加载失败</Text>
-          <Text style={styles.errorKey}>key: {this.props.pageKey}</Text>
+          <Text style={styles.errorMeta}>key: {this.props.pageKey}</Text>
           <Text style={styles.errorMsg}>{this.state.error.message}</Text>
         </View>
       );
@@ -56,9 +55,6 @@ export type PageShellProps = {
   children: ReactNode;
 };
 
-/**
- * 整页替换模式下的页面外壳
- */
 export function PageShell({
   pageKey,
   title,
@@ -68,66 +64,44 @@ export function PageShell({
 
   return (
     <PageErrorBoundary pageKey={pageKey}>
-      <SafeAreaProvider>
-        <SafeAreaView
-          style={[styles.root, isDark ? styles.rootDark : styles.rootLight]}
-          edges={['top', 'left', 'right', 'bottom']}>
-          <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
-          {title ? (
-            <View style={styles.header}>
-              <Text style={[styles.title, isDark && styles.textLight]}>
-                {title}
-              </Text>
-              <Text style={styles.sub}>分包 key: {pageKey}</Text>
-            </View>
-          ) : null}
-          <ScrollView
-            contentContainerStyle={styles.body}
-            keyboardShouldPersistTaps="handled">
-            {children}
-          </ScrollView>
-        </SafeAreaView>
-      </SafeAreaProvider>
+      <SafeAreaView
+        style={[styles.root, isDark ? styles.rootDark : styles.rootLight]}
+        edges={['top', 'left', 'right', 'bottom']}>
+        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
+        {title ? (
+          <View style={styles.header}>
+            <Text style={[styles.title, isDark && styles.textLight]}>{title}</Text>
+            <Text style={styles.subtitle}>分包 key: {pageKey}</Text>
+          </View>
+        ) : null}
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled">
+          {children}
+        </ScrollView>
+      </SafeAreaView>
     </PageErrorBoundary>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  rootLight: { backgroundColor: '#F7F8FA' },
-  rootDark: { backgroundColor: '#0F1115' },
-  header: {
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 8,
-  },
-  title: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: '#111',
-  },
+  rootLight: { backgroundColor: '#F5F5F5' },
+  rootDark: { backgroundColor: '#111111' },
+  header: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 8 },
+  title: { fontSize: 22, fontWeight: '700', color: '#111111' },
   textLight: { color: '#F5F5F5' },
-  sub: {
-    marginTop: 4,
-    fontSize: 13,
-    color: '#888',
-  },
-  body: {
-    paddingHorizontal: 20,
-    paddingBottom: 40,
-  },
+  subtitle: { marginTop: 4, fontSize: 12, color: '#888888' },
+  scroll: { flex: 1 },
+  scrollContent: { paddingHorizontal: 20, paddingBottom: 40 },
   errorBox: {
     flex: 1,
     justifyContent: 'center',
     padding: 24,
-    backgroundColor: '#FFF5F5',
+    backgroundColor: '#FFEBEE',
   },
-  errorTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#C62828',
-    marginBottom: 8,
-  },
-  errorKey: { color: '#666', marginBottom: 8 },
-  errorMsg: { color: '#333', lineHeight: 20 },
+  errorTitle: { fontSize: 18, fontWeight: '700', color: '#B00020' },
+  errorMeta: { marginTop: 8, fontSize: 13, color: '#666666' },
+  errorMsg: { marginTop: 8, fontSize: 14, color: '#333333' },
 });

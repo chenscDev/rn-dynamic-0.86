@@ -1,10 +1,13 @@
 package com.rndynamic.loader
 
+import android.content.Context
 import android.os.Bundle
 import android.view.View
+import android.view.ViewGroup
 import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
+import android.widget.ScrollView
 import android.widget.Switch
 import android.widget.TextView
 import android.widget.Toast
@@ -18,11 +21,13 @@ import java.io.File
 /**
  * 本地 / 测试环境调试入口
  *
- * - 本地：host + port + key → Metro（common + page 双 URL）
- * - 测试：关闭 DevServer，填写测试包 URL
- * - platform 固定 android（由宿主标识）
+ * - 本地：host + port + key → Metro（common + page）
+ * - 测试/CDN：关闭 DevServer，按 channel（分支）解析分包；未找到时回退 master
+ * - channel / host / key 等会记住上次输入
  */
 class RNDebugEntryActivity : AppCompatActivity() {
+    private lateinit var prefs: android.content.SharedPreferences
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         AuthSession.init(applicationContext)
@@ -31,46 +36,51 @@ class RNDebugEntryActivity : AppCompatActivity() {
             finish()
             return
         }
-        // 避免内容顶到状态栏，保证顶部输入框可点
         WindowCompat.setDecorFitsSystemWindows(window, true)
+        prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+
+        val defaultChannel = prefs.getString(KEY_CHANNEL, null)
+            ?: RNAssetBundleHelper.readBuildChannel(this).ifBlank { "master" }
 
         val hostField = EditText(this).apply {
             hint = "Host（真机填电脑局域网 IP）"
-            setText("")
+            setText(prefs.getString(KEY_HOST, "") ?: "")
             minHeight = dp(48)
         }
         val portField = EditText(this).apply {
             hint = "Port"
-            setText("8081")
+            setText(prefs.getString(KEY_PORT, "8081") ?: "8081")
             inputType = android.text.InputType.TYPE_CLASS_NUMBER
             minHeight = dp(48)
         }
         val keyField = EditText(this).apply {
             hint = "分包 key"
-            setText("home")
+            setText(prefs.getString(KEY_BUNDLE_KEY, "home") ?: "home")
             minHeight = dp(48)
         }
         val channelField = EditText(this).apply {
-            hint = "channel（分支，Metro 可填 master）"
-            setText("master")
+            hint = "channel（git 分支名，如 ff-cc / master）"
+            setText(defaultChannel)
             minHeight = dp(48)
         }
         val urlField = EditText(this).apply {
-            hint = "测试环境 Bundle URL"
+            hint = "可选：直接填 Bundle URL（优先于 channel CDN）"
+            setText(prefs.getString(KEY_URL, "") ?: "")
             minHeight = dp(48)
         }
         val devSwitch = Switch(this).apply {
             text = "使用 DevServer（Metro）"
-            isChecked = true
+            isChecked = prefs.getBoolean(KEY_DEV, true)
             minHeight = dp(48)
         }
         val commonSwitch = Switch(this).apply {
             text = "预拉取 common（Metro 挂载仍用 page 全量包）"
-            isChecked = true
+            isChecked = prefs.getBoolean(KEY_COMMON, true)
             minHeight = dp(48)
         }
         val info = TextView(this).apply {
             textSize = 13f
+            setTextColor(0xFF333333.toInt())
             setPadding(0, dp(16), 0, 0)
         }
 
@@ -78,14 +88,31 @@ class RNDebugEntryActivity : AppCompatActivity() {
         val clearButton = Button(this).apply { text = "清除本地分包缓存" }
 
         fun refreshInfo() {
-            val mode = if (devSwitch.isChecked) "本地 Metro（双包）" else "测试包 / channel CDN"
+            val mode = if (devSwitch.isChecked) {
+                "本地 Metro（代码以电脑 rn-biz 当前分支为准）"
+            } else {
+                "channel CDN / 内置 assets（输入分支优先，找不到回退 master）"
+            }
             info.text = """
                 模式: $mode
-                platform: android（宿主标识）
-                channel: Metro 调试填 git 分支（如 master）；CDN 发测再填对应 channel
-                连手机热点时 Host 填电脑在热点网段的 IP（非 192.168.1.x）
+                platform: android
+                channel: 以本页输入为准；CDN/内置包路径 rn/.../{channel}/...
+                Metro 模式下 channel 会写入 initialProps，JS 仍来自电脑 Metro 服务
                 CDN: rn/0.86.0/{channel}/{key}/android/...
+                Metro 必须在 rn-biz-0.86 目录执行 yarn start（不要用 rn-dynamic）
             """.trimIndent()
+        }
+
+        fun savePrefs(channel: String) {
+            prefs.edit()
+                .putString(KEY_HOST, hostField.text.toString().trim())
+                .putString(KEY_PORT, portField.text.toString().trim().ifBlank { "8081" })
+                .putString(KEY_BUNDLE_KEY, keyField.text.toString().trim())
+                .putString(KEY_CHANNEL, channel)
+                .putString(KEY_URL, urlField.text.toString().trim())
+                .putBoolean(KEY_DEV, devSwitch.isChecked)
+                .putBoolean(KEY_COMMON, commonSwitch.isChecked)
+                .apply()
         }
 
         fun formatError(error: Throwable): String {
@@ -109,6 +136,7 @@ class RNDebugEntryActivity : AppCompatActivity() {
             commonLocal: String?,
             pageUrl: String,
             commonUrl: String?,
+            useSplit: Boolean,
         ) {
             startActivity(
                 RNContainerActivity.intentForLocalPaths(
@@ -119,36 +147,68 @@ class RNDebugEntryActivity : AppCompatActivity() {
                     commonPath = commonLocal,
                     channel = channel,
                     fromNative = "debug-entry",
-                ),
+                ).apply {
+                    putExtra(RNContainerActivity.EXTRA_USE_SPLIT_PAGE, useSplit)
+                },
             )
             openButton.isEnabled = true
             clearButton.isEnabled = true
             info.text = buildString {
-                append("已打开 RN 容器 channel=$channel\n")
+                append("已打开 RN 容器 channel=$channel split=$useSplit\n")
                 append("common=${commonUrl ?: "(无)"}\n")
                 append("page=$pageUrl")
             }
+        }
+
+        /** 按 channel 解析内置/CDN 分包；失败则回退 master */
+        fun resolveByChannel(key: String, preferredChannel: String): Pair<String, RNBundleResolver.ResolvedBundles> {
+            val cacheDir = File(cacheDir, "RNDynamicBundles")
+            val tried = linkedSetOf<String>()
+            val candidates = listOf(preferredChannel, "master", "main")
+                .map { RNBundleConfigStore.normalizeChannel(it) }
+                .filter { it.isNotBlank() }
+                .distinct()
+            var lastError: Exception? = null
+            for (channel in candidates) {
+                tried.add(channel)
+                try {
+                    val resolved = RNBundleResolver.resolve(
+                        context = this,
+                        channel = channel,
+                        bundleKey = key,
+                        cacheDir = cacheDir,
+                    )
+                    return channel to resolved
+                } catch (error: Exception) {
+                    lastError = error
+                }
+            }
+            throw RNBundleMount.MountException(
+                "按 channel 解析失败 key=$key tried=${tried.joinToString(",")} → ${lastError?.message}",
+                lastError,
+            )
         }
 
         openButton.setOnClickListener {
             if (!openButton.isEnabled) return@setOnClickListener
             refreshInfo()
             val key = keyField.text.toString().trim()
-            val channel = RNBundleConfigStore.normalizeChannel(
+            val channelInput = RNBundleConfigStore.normalizeChannel(
                 channelField.text.toString().ifBlank { "master" },
             )
             if (key.isEmpty()) {
                 Toast.makeText(this, "请填写分包 key", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
-            val host = hostField.text.toString().trim().ifBlank {
-                Toast.makeText(this, "请填写电脑局域网 IP", Toast.LENGTH_SHORT).show()
-                return@setOnClickListener
-            }
-            val port = portField.text.toString().toIntOrNull() ?: 8081
+            savePrefs(channelInput)
 
             try {
                 if (devSwitch.isChecked) {
+                    val host = hostField.text.toString().trim().ifBlank {
+                        Toast.makeText(this, "请填写电脑局域网 IP", Toast.LENGTH_SHORT).show()
+                        return@setOnClickListener
+                    }
+                    val port = portField.text.toString().toIntOrNull() ?: 8081
                     val pageUrl = RNBundleMount.metroPageUrl(host, port, key, "android")
                     val commonUrl =
                         if (commonSwitch.isChecked) {
@@ -158,7 +218,7 @@ class RNDebugEntryActivity : AppCompatActivity() {
                         }
                     openButton.isEnabled = false
                     clearButton.isEnabled = false
-                    info.text = "正在从 Metro 拉取 bundle…"
+                    info.text = "正在从 Metro 拉取 bundle…（channel=$channelInput）"
                     Thread {
                         try {
                             if (commonUrl != null) {
@@ -167,13 +227,19 @@ class RNDebugEntryActivity : AppCompatActivity() {
                                 runOnUiThread { info.text = "正在下载 page bundle…" }
                                 val pageLocal = RNBundleMount.resolveToLocalFile(this, pageUrl)
                                 runOnUiThread {
-                                    openMountActivity(key, channel, pageLocal, commonLocal, pageUrl, commonUrl)
+                                    openMountActivity(
+                                        key, channelInput, pageLocal, commonLocal,
+                                        pageUrl, commonUrl, useSplit = false,
+                                    )
                                 }
                             } else {
                                 runOnUiThread { info.text = "正在下载 page bundle…" }
                                 val pageLocal = RNBundleMount.resolveToLocalFile(this, pageUrl)
                                 runOnUiThread {
-                                    openMountActivity(key, channel, pageLocal, null, pageUrl, null)
+                                    openMountActivity(
+                                        key, channelInput, pageLocal, null,
+                                        pageUrl, null, useSplit = false,
+                                    )
                                 }
                             }
                         } catch (error: Exception) {
@@ -185,20 +251,46 @@ class RNDebugEntryActivity : AppCompatActivity() {
                         }
                     }.start()
                 } else {
-                    val url = urlField.text.toString().trim()
-                    if (url.isEmpty()) {
-                        Toast.makeText(this, "请填写测试 Bundle URL", Toast.LENGTH_SHORT).show()
-                        return@setOnClickListener
-                    }
+                    val directUrl = urlField.text.toString().trim()
                     openButton.isEnabled = false
                     clearButton.isEnabled = false
-                    info.text = "正在准备 Bundle…"
+                    info.text = if (directUrl.isNotEmpty()) {
+                        "正在下载指定 Bundle URL…"
+                    } else {
+                        "正在按 channel=$channelInput 解析分包（失败回退 master）…"
+                    }
                     Thread {
                         try {
-                            runOnUiThread { info.text = "正在下载测试 bundle…" }
-                            val local = RNBundleMount.resolveToLocalFile(this, url)
-                            runOnUiThread {
-                                openMountActivity(key, channel, local, null, url, null)
+                            if (directUrl.isNotEmpty()) {
+                                val local = RNBundleMount.resolveToLocalFile(this, directUrl)
+                                runOnUiThread {
+                                    openMountActivity(
+                                        key, channelInput, local, null,
+                                        directUrl, null, useSplit = false,
+                                    )
+                                }
+                            } else {
+                                val (resolvedChannel, resolved) = resolveByChannel(key, channelInput)
+                                runOnUiThread {
+                                    if (resolvedChannel != channelInput) {
+                                        Toast.makeText(
+                                            this,
+                                            "channel=$channelInput 未找到，已回退 $resolvedChannel",
+                                            Toast.LENGTH_LONG,
+                                        ).show()
+                                        channelField.setText(resolvedChannel)
+                                        savePrefs(resolvedChannel)
+                                    }
+                                    openMountActivity(
+                                        moduleName = resolved.pageItem.moduleName,
+                                        channel = resolvedChannel,
+                                        pageLocal = resolved.pageFile.absolutePath,
+                                        commonLocal = resolved.commonFile?.absolutePath,
+                                        pageUrl = resolved.pageFile.absolutePath,
+                                        commonUrl = resolved.commonFile?.absolutePath,
+                                        useSplit = true,
+                                    )
+                                }
                             }
                         } catch (error: Exception) {
                             runOnUiThread {
@@ -210,6 +302,8 @@ class RNDebugEntryActivity : AppCompatActivity() {
                     }.start()
                 }
             } catch (error: Exception) {
+                openButton.isEnabled = true
+                clearButton.isEnabled = true
                 info.text = "挂载失败: ${formatError(error)}"
             }
         }
@@ -224,10 +318,10 @@ class RNDebugEntryActivity : AppCompatActivity() {
         }
 
         refreshInfo()
+        devSwitch.setOnCheckedChangeListener { _, _ -> refreshInfo() }
 
-        val root = LinearLayout(this).apply {
+        val form = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            // 顶部额外下移，避开状态栏 / 刘海，增大可点区域
             setPadding(dp(24), dp(24), dp(24), dp(24))
             addView(hostField)
             addView(portField)
@@ -240,12 +334,20 @@ class RNDebugEntryActivity : AppCompatActivity() {
             addView(clearButton)
             addView(info)
         }
+        val root = ScrollView(this).apply {
+            addView(
+                form,
+                ViewGroup.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                ),
+            )
+        }
 
         setContentView(root)
         applyStatusBarInsets(root)
     }
 
-    /** 按系统栏 insets 再给顶部加一截 padding，避免输入框贴边难点 */
     private fun applyStatusBarInsets(root: View) {
         val baseLeft = root.paddingLeft
         val baseTop = root.paddingTop
@@ -266,5 +368,16 @@ class RNDebugEntryActivity : AppCompatActivity() {
 
     private fun dp(value: Int): Int {
         return (value * resources.displayMetrics.density).toInt()
+    }
+
+    companion object {
+        private const val PREFS_NAME = "rn_debug_entry"
+        private const val KEY_HOST = "host"
+        private const val KEY_PORT = "port"
+        private const val KEY_BUNDLE_KEY = "bundle_key"
+        private const val KEY_CHANNEL = "channel"
+        private const val KEY_URL = "url"
+        private const val KEY_DEV = "dev"
+        private const val KEY_COMMON = "common"
     }
 }

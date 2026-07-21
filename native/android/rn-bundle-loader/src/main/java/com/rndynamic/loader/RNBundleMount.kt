@@ -7,9 +7,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.ViewTreeObserver
 import android.widget.FrameLayout
-import com.facebook.react.PackageList
 import com.facebook.react.bridge.JSBundleLoader
-import com.facebook.react.bridge.JSBundleLoaderDelegate
 import com.facebook.react.bridge.UiThreadUtil
 import com.facebook.react.common.annotations.UnstableReactNativeAPI
 import com.facebook.react.defaults.DefaultComponentsRegistry
@@ -27,6 +25,7 @@ import java.net.HttpURLConnection
 import java.net.URI
 import java.net.URL
 import java.util.concurrent.CountDownLatch
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * RN 根视图挂载辅助（RN 0.86 Bridgeless / ReactHost）。
@@ -52,6 +51,19 @@ object RNBundleMount {
     /** 挂载后持有 Host，便于 Activity 生命周期转发 */
     private val activeHostsByActivity = mutableMapOf<Int, ReactHostImpl>()
 
+    /** Activity 注册运行时错误回调，避免 JS 异常后静默白屏 */
+    private val runtimeErrorListeners = ConcurrentHashMap<Int, (String) -> Unit>()
+
+    @JvmStatic
+    fun setRuntimeErrorListener(activity: Activity, listener: ((String) -> Unit)?) {
+        val key = activity.hashCode()
+        if (listener == null) {
+            runtimeErrorListeners.remove(key)
+        } else {
+            runtimeErrorListeners[key] = listener
+        }
+    }
+
     /** Activity onResume 时转发给 ReactHost */
     @JvmStatic
     fun forwardOnHostResume(activity: Activity) {
@@ -75,7 +87,9 @@ object RNBundleMount {
     /** Activity onDestroy 时转发给 ReactHost */
     @JvmStatic
     fun forwardOnHostDestroy(activity: Activity) {
-        val host = activeHostsByActivity.remove(activity.hashCode()) ?: return
+        val key = activity.hashCode()
+        runtimeErrorListeners.remove(key)
+        val host = activeHostsByActivity.remove(key) ?: return
         runOnUiThreadSyncFromAnyThread { host.onHostDestroy(activity) }
     }
 
@@ -96,7 +110,7 @@ object RNBundleMount {
     /**
      * 在 container 中挂载 RN（必须在后台线程调用，禁止在主线程 waitForCompletion）。
      * - 仅 page：以 page 为入口 bundle
-     * - common + page：先加载 common，再 loadSplitBundle 注入 page
+     * - common + page：合并为单脚本一次加载（避免二次 load 导致 registerPage 未执行）
      */
     @JvmStatic
     fun mount(activity: Activity, container: ViewGroup, request: Request): Any {
@@ -141,24 +155,74 @@ object RNBundleMount {
         val commonLocal = resolveToLocalFile(activity, commonSource)
         val pageLocal = resolveToLocalFile(activity, pageSource)
 
+        // Bridgeless 下二次 loadJSBundle 完整 Metro page 包时，page 入口常因依赖解析失败
+        // 导致 registerPage 未执行（表现为 "xxx has not been registered"）。
+        // 可靠做法：把 common 模块定义 + page 模块定义拼成单一脚本一次加载。
+        val combined = combineCommonAndPageBundle(
+            activity = activity,
+            moduleName = request.moduleName,
+            commonPath = commonLocal,
+            pagePath = pageLocal,
+        )
+        Log.i(
+            "RNBundleMount",
+            "mountDual combined module=${request.moduleName} file=${combined.absolutePath} size=${combined.length()}",
+        )
+
         val reactHost = createReactHost(
             activity = activity,
-            bundlePath = commonLocal,
-            sourceUrl = if (isHttp(commonSource)) commonSource else null,
+            bundlePath = combined.absolutePath,
+            sourceUrl = null,
             useDevSupport = false,
         )
-        runOnUiThreadSync {
-            reactHost.onHostResume(activity)
-        }
-        waitForTask(reactHost.start(), "启动 ReactHost")
-
-        loadSplitBundle(
-            reactHost,
-            pageLocal,
-            if (isHttp(pageSource)) pageSource else pageLocal,
-        )
-
         return attachSurface(activity, container, reactHost, request.moduleName, request.initialProps)
+    }
+
+    /**
+     * 合并 common + page 为单文件：
+     * 1) common 全文（保留其 __d / __r，确保公共模块与标记位就绪）
+     * 2) page 从首个 __d( 起截取（去掉第二份 Metro runtime 前缀，避免冲掉已注册模块）
+     */
+    private fun combineCommonAndPageBundle(
+        activity: Activity,
+        moduleName: String,
+        commonPath: String,
+        pagePath: String,
+    ): File {
+        val commonText = File(commonPath).readText(Charsets.UTF_8)
+        val pageText = File(pagePath).readText(Charsets.UTF_8)
+        if (commonText.isBlank()) {
+            throw MountException("common bundle 为空: $commonPath")
+        }
+        if (pageText.isBlank()) {
+            throw MountException("page bundle 为空: $pagePath")
+        }
+
+        val pageDefsStart = pageText.indexOf("__d(")
+        if (pageDefsStart < 0) {
+            throw MountException("page bundle 未找到 __d 模块定义: $pagePath")
+        }
+        val pageBody = pageText.substring(pageDefsStart)
+
+        val outDir = File(activity.cacheDir, "RNDynamicBundles/combined")
+        if (!outDir.exists() && !outDir.mkdirs()) {
+            throw MountException("无法创建合并目录: ${outDir.absolutePath}")
+        }
+        val outFile = File(outDir, "$moduleName.combined.bundle")
+        outFile.writeText(
+            buildString(commonText.length + pageBody.length + 64) {
+                append(commonText)
+                if (!commonText.endsWith("\n")) append('\n')
+                append(";\n")
+                append(pageBody)
+                if (!pageBody.endsWith("\n")) append('\n')
+            },
+            Charsets.UTF_8,
+        )
+        if (outFile.length() <= 0L) {
+            throw MountException("合并 bundle 写入失败: ${outFile.absolutePath}")
+        }
+        return outFile
     }
 
     private fun attachSurface(
@@ -276,7 +340,14 @@ object RNBundleMount {
             jsRuntimeFactory = HermesInstance(),
             turboModuleManagerDelegateBuilder = DefaultTurboModuleManagerDelegate.Builder(),
             exceptionHandler = { error ->
-                Log.e("RNBundleMount", "ReactHost 运行时错误: ${formatError(error)}", error)
+                val message = formatError(error)
+                Log.e("RNBundleMount", "ReactHost 运行时错误: $message", error)
+                val listener = runtimeErrorListeners[activity.hashCode()]
+                if (listener != null) {
+                    UiThreadUtil.runOnUiThread {
+                        listener.invoke(message)
+                    }
+                }
             },
         )
 
@@ -290,43 +361,6 @@ object RNBundleMount {
             allowPackagerServerAccess = true,
             useDevSupport = useDevSupport,
         )
-    }
-
-    /** RN 0.86：通过 ReactHostImpl.loadBundle（internal，JVM 名带模块后缀）注入 page 分包 */
-    private fun loadSplitBundle(host: ReactHostImpl, pagePath: String, sourceUrl: String) {
-        val splitLoader = object : JSBundleLoader() {
-            override fun loadScript(delegate: JSBundleLoaderDelegate): String {
-                delegate.loadSplitBundleFromFile(pagePath, sourceUrl)
-                return sourceUrl
-            }
-        }
-        waitForTask(invokeLoadBundle(host, splitLoader), "注入 page bundle")
-    }
-
-    /**
-     * Kotlin internal 方法在 release AAR 中会 mangled 为 loadBundle$ReactAndroid_release，
-     * 不能直接用 "loadBundle" 反射。
-     */
-    private fun invokeLoadBundle(host: ReactHostImpl, loader: JSBundleLoader): TaskInterface<Boolean> {
-        val hostClass = ReactHostImpl::class.java
-        val loaderClass = JSBundleLoader::class.java
-        val method = hostClass.methods.firstOrNull { candidate ->
-            candidate.parameterCount == 1 &&
-                candidate.parameterTypes[0] == loaderClass &&
-                (candidate.name == "loadBundle\$ReactAndroid_release" || candidate.name == "loadBundle")
-        } ?: throw MountException("ReactHost 未找到 loadBundle 方法")
-
-        return try {
-            @Suppress("UNCHECKED_CAST")
-            method.invoke(host, loader) as TaskInterface<Boolean>
-        } catch (error: Exception) {
-            val cause = if (error is java.lang.reflect.InvocationTargetException) {
-                error.targetException ?: error
-            } else {
-                error
-            }
-            throw MountException("调用 loadBundle 失败: ${formatError(cause)}", cause)
-        }
     }
 
     private fun waitForTask(task: TaskInterface<*>, label: String) {

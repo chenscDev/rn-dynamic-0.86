@@ -43,15 +43,19 @@ class RNContainerActivity : AppCompatActivity(), DefaultHardwareBackBtnHandler {
         }
 
         WindowCompat.setDecorFitsSystemWindows(window, true)
+        // 避免 DayNight 深色窗体 + RN 透明根导致「全黑/全白」误判为空白
+        window.decorView.setBackgroundColor(0xFFF5F5F5.toInt())
 
         loadingView = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
+            setBackgroundColor(0xFFF5F5F5.toInt())
             addView(ProgressBar(this@RNContainerActivity))
             addView(
                 TextView(this@RNContainerActivity).apply {
                     text = "正在加载…"
                     textSize = 15f
+                    setTextColor(0xFF333333.toInt())
                     setPadding(0, dp(16), 0, 0)
                 },
             )
@@ -59,13 +63,18 @@ class RNContainerActivity : AppCompatActivity(), DefaultHardwareBackBtnHandler {
 
         errorView = TextView(this).apply {
             textSize = 14f
+            setTextColor(0xFFB00020.toInt())
+            setBackgroundColor(0xFFFFEBEE.toInt())
             setPadding(dp(24), dp(24), dp(24), dp(24))
             visibility = View.GONE
         }
 
-        rnContainer = FrameLayout(this)
+        rnContainer = FrameLayout(this).apply {
+            setBackgroundColor(0xFFF5F5F5.toInt())
+        }
 
         val root = FrameLayout(this).apply {
+            setBackgroundColor(0xFFF5F5F5.toInt())
             addView(
                 rnContainer,
                 FrameLayout.LayoutParams.MATCH_PARENT,
@@ -90,6 +99,23 @@ class RNContainerActivity : AppCompatActivity(), DefaultHardwareBackBtnHandler {
                 ViewGroup.LayoutParams.MATCH_PARENT,
             ),
         )
+
+        RNBundleMount.setRuntimeErrorListener(this) { message ->
+            if (isFinishing || isDestroyed) return@setRuntimeErrorListener
+            loadingView.visibility = View.GONE
+            errorView.visibility = View.VISIBLE
+            errorView.text = "RN 运行时错误:\n$message"
+            // 登录容器运行时失败时降级原生登录，避免一直白屏
+            if (isLoginContainer()) {
+                startActivity(
+                    LoginActivity.intentForFallback(
+                        this@RNContainerActivity,
+                        intent.getStringExtra(AuthNavigator.EXTRA_LOGIN_REASON),
+                    ),
+                )
+                finish()
+            }
+        }
 
         onBackPressedDispatcher.addCallback(
             this,
