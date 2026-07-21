@@ -52,32 +52,35 @@ object AuthNavigator {
                             title = route.bundleTitle ?: route.bundleKey,
                             bundleKey = route.bundleKey,
                             channel = RNAssetBundleHelper.readBuildChannel(context),
-                        ),
+                        ).apply {
+                            // 登录成功后清栈，避免残留旧业务页
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+                        },
                     )
                     return
                 }
             }
             "tab" -> {
-                val intent = Intent(context, MainShellActivity::class.java).apply {
-                    putExtra(MainShellActivity.EXTRA_INITIAL_TAB, route.tabId)
-                    if (context !is Activity) {
-                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-                    }
-                }
-                context.startActivity(intent)
+                openShell(context, route.tabId ?: "home")
                 return
             }
         }
+        // 无回跳（含退出后再登录）：进入首页
+        openShell(context, "home")
+    }
+
+    private fun openShell(context: Context, tabId: String) {
         val intent = Intent(context, MainShellActivity::class.java).apply {
-            if (context !is Activity) {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-            }
+            putExtra(MainShellActivity.EXTRA_INITIAL_TAB, tabId)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
         }
         context.startActivity(intent)
     }
 
     fun logoutAndOpenLogin(context: Context) {
         AuthSession.clearLogin()
+        // 退出后丢弃回跳，避免再登录直接回到之前离开的 RN 页
+        AuthSession.clearResumeRoute()
         val intent = RNContainerActivity.intentForLogin(context).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
         }

@@ -32,6 +32,11 @@
         android:exported="false" />
 
       <activity
+        android:name="com.rndynamic.loader.PipelineDemoActivity"
+        android:label="分包全流程"
+        android:exported="false" />
+
+      <activity
         android:name=".MainActivity"
         android:label="RnDynamicBase"
         android:configChanges="keyboard|keyboardHidden|orientation|screenLayout|screenSize|smallestScreenSize|uiMode"

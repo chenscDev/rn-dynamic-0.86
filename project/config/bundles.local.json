@@ -1,7 +1,7 @@
 {
   "rnVersion": "0.86.0",
   "baseVersion": "0.1.0",
-  "updatedAt": "2026-07-16T06:34:18.199Z",
+  "updatedAt": "2026-07-21T03:43:26.413Z",
   "bundles": {
     "order": [
       {
@@ -21,19 +21,25 @@
         "key": "home",
         "name": "home",
         "componentName": "home",
-        "url": "file:///Users/yangyan/Documents/mine/rn-dynamic-0.86/project/dist/bundles/home/android/home.android.b89ffac55a91.bundle",
-        "hash": "b89ffac55a91",
+        "url": "http://127.0.0.1:8787/rn/0.86.0/main/home/android/home.android.9740b9abc85e.bundle",
+        "hash": "9740b9abc85e",
         "platform": "android",
-        "localPath": "project/dist/bundles/home/android/home.android.b89ffac55a91.bundle"
+        "channel": "main",
+        "version": "9740b9abc85e",
+        "localPath": "project/dist/bundles/home/android/home.android.9740b9abc85e.bundle",
+        "provider": "local"
       },
       {
         "key": "home",
         "name": "home",
         "componentName": "home",
-        "url": "file:///Users/yangyan/Documents/mine/rn-dynamic-0.86/project/dist/bundles/home/ios/home.ios.caa4fe8171d3.bundle",
-        "hash": "caa4fe8171d3",
+        "url": "http://127.0.0.1:8787/rn/0.86.0/main/home/ios/home.ios.205f8baba0c9.bundle",
+        "hash": "205f8baba0c9",
         "platform": "ios",
-        "localPath": "project/dist/bundles/home/ios/home.ios.caa4fe8171d3.bundle"
+        "channel": "main",
+        "version": "205f8baba0c9",
+        "localPath": "project/dist/bundles/home/ios/home.ios.205f8baba0c9.bundle",
+        "provider": "local"
       }
     ]
   }

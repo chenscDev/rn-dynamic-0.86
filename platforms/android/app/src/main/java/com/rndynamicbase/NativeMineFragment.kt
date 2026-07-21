@@ -13,6 +13,7 @@ import androidx.fragment.app.Fragment
 import com.rndynamic.loader.AuthNavigator
 import com.rndynamic.loader.AuthSession
 import com.rndynamic.loader.LoginActivity
+import com.rndynamic.loader.PipelineDemoActivity
 import com.rndynamic.loader.RNDebugEntryActivity
 
 /**
@@ -49,7 +50,14 @@ class NativeMineFragment : Fragment() {
         val changePasswordButton = Button(requireContext()).apply {
             text = "修改密码"
             setOnClickListener {
-                startActivity(Intent(requireContext(), LoginActivity::class.java))
+                startActivity(LoginActivity.intentForChangePassword(requireContext()))
+            }
+        }
+
+        val pipelineButton = Button(requireContext()).apply {
+            text = "分包全流程演示"
+            setOnClickListener {
+                startActivity(Intent(requireContext(), PipelineDemoActivity::class.java))
             }
         }
 
@@ -67,6 +75,7 @@ class NativeMineFragment : Fragment() {
             addView(userCard, LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
             addView(logoutButton, LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
             addView(changePasswordButton, LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+            addView(pipelineButton, LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
             addView(debugButton, LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
             applySystemBarInsets(extraTopDp = 4)
         }

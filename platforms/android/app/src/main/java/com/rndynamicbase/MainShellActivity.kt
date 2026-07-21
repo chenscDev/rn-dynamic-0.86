@@ -26,7 +26,7 @@ import java.io.File
 import kotlin.concurrent.thread
 
 /**
- * 原生 Shell：Tab / RN 入口由 Mock 接口随机下发
+ * 原生 Shell：Tab / RN 入口由 Mock 接口下发（固定全量入口）
  */
 class MainShellActivity : AppCompatActivity() {
     private val containerId = View.generateViewId()
@@ -59,8 +59,30 @@ class MainShellActivity : AppCompatActivity() {
         loadingView = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
+            setPadding(dp(24), dp(24), dp(24), dp(24))
             addView(ProgressBar(context))
-            addView(TextView(context).apply { text = "正在拉取 Mock 配置…" })
+            addView(
+                TextView(context).apply {
+                    text = "正在进入 App Shell…"
+                    textSize = 16f
+                    setTypeface(typeface, Typeface.BOLD)
+                    setPadding(0, dp(16), 0, dp(8))
+                },
+            )
+            addView(
+                TextView(context).apply {
+                    text = buildString {
+                        appendLine("channel: $buildChannel")
+                        appendLine("配置目录: files/rn-config/channels/$buildChannel/")
+                        appendLine("· bundles.local.json")
+                        appendLine("· remote.local.json")
+                        append("下一步: Mock shell → Tab 首页")
+                    }
+                    textSize = 12f
+                    setTextColor(0xFF555555.toInt())
+                    setLineSpacing(0f, 1.25f)
+                },
+            )
         }
 
         val root = FrameLayout(this).apply {

@@ -55,6 +55,11 @@ object AuthSession {
             .apply()
     }
 
+    /** 清除登录回跳路由（退出登录后应回到首页，不恢复旧 RN 页） */
+    fun clearResumeRoute() {
+        prefs().edit().remove(KEY_RESUME_JSON).apply()
+    }
+
     /** 写入 RN initialProps / 桥接 */
     fun appendAuthProps(props: android.os.Bundle) {
         props.putString("authToken", getToken())

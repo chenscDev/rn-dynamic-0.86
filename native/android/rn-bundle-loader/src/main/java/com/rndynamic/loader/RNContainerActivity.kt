@@ -4,12 +4,14 @@ import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
+import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.ProgressBar
+import android.widget.ScrollView
 import android.widget.TextView
 import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
@@ -24,6 +26,8 @@ import kotlin.concurrent.thread
 class RNContainerActivity : AppCompatActivity(), DefaultHardwareBackBtnHandler {
     private lateinit var rnContainer: FrameLayout
     private lateinit var loadingView: View
+    private lateinit var loadingTitle: TextView
+    private lateinit var loadingDetail: TextView
     private lateinit var errorView: TextView
 
     /** mount 线程检查此标志，Activity 销毁时置 true */
@@ -46,17 +50,37 @@ class RNContainerActivity : AppCompatActivity(), DefaultHardwareBackBtnHandler {
         // 避免 DayNight 深色窗体 + RN 透明根导致「全黑/全白」误判为空白
         window.decorView.setBackgroundColor(0xFFF5F5F5.toInt())
 
-        loadingView = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER
+        loadingTitle = TextView(this).apply {
+            text = "正在加载分包…"
+            textSize = 16f
+            setTypeface(typeface, android.graphics.Typeface.BOLD)
+            setTextColor(0xFF111111.toInt())
+            gravity = Gravity.CENTER_HORIZONTAL
+        }
+        loadingDetail = TextView(this).apply {
+            text = "解析包路径中…"
+            textSize = 12f
+            setTextColor(0xFF555555.toInt())
+            setLineSpacing(dp(2).toFloat(), 1.15f)
+            setPadding(dp(20), dp(12), dp(20), 0)
+        }
+        loadingView = ScrollView(this).apply {
             setBackgroundColor(0xFFF5F5F5.toInt())
-            addView(ProgressBar(this@RNContainerActivity))
+            isFillViewport = true
             addView(
-                TextView(this@RNContainerActivity).apply {
-                    text = "正在加载…"
-                    textSize = 15f
-                    setTextColor(0xFF333333.toInt())
-                    setPadding(0, dp(16), 0, 0)
+                LinearLayout(this@RNContainerActivity).apply {
+                    orientation = LinearLayout.VERTICAL
+                    gravity = Gravity.CENTER_HORIZONTAL
+                    setPadding(dp(16), dp(48), dp(16), dp(32))
+                    addView(ProgressBar(this@RNContainerActivity))
+                    addView(
+                        loadingTitle,
+                        LinearLayout.LayoutParams(
+                            LinearLayout.LayoutParams.MATCH_PARENT,
+                            LinearLayout.LayoutParams.WRAP_CONTENT,
+                        ).apply { topMargin = dp(16) },
+                    )
+                    addView(loadingDetail)
                 },
             )
         }
@@ -105,7 +129,6 @@ class RNContainerActivity : AppCompatActivity(), DefaultHardwareBackBtnHandler {
             loadingView.visibility = View.GONE
             errorView.visibility = View.VISIBLE
             errorView.text = "RN 运行时错误:\n$message"
-            // 登录容器运行时失败时降级原生登录，避免一直白屏
             if (isLoginContainer()) {
                 startActivity(
                     LoginActivity.intentForFallback(
@@ -121,7 +144,6 @@ class RNContainerActivity : AppCompatActivity(), DefaultHardwareBackBtnHandler {
             this,
             object : OnBackPressedCallback(true) {
                 override fun handleOnBackPressed() {
-                    // 优先 RN 栈内 pop；栈底时 RN 回调 invokeDefaultOnBackPressed → finishToNative
                     if (!RNBundleMount.forwardOnBackPressed(this@RNContainerActivity)) {
                         finishToNative()
                     }
@@ -131,12 +153,18 @@ class RNContainerActivity : AppCompatActivity(), DefaultHardwareBackBtnHandler {
 
         thread(name = "RNContainerMount") {
             try {
+                updateLoading("解析分包配置…", "channel / bundleKey / assets / cache")
                 val request = buildMountRequest()
                 if (isActivityDestroyed) return@thread
+                showResolvedPaths(request)
+                updateLoading("挂载 ReactHost…", loadingDetail.text?.toString().orEmpty())
+                val startedAt = System.currentTimeMillis()
                 RNBundleMount.mount(this, rnContainer, request)
                 if (isActivityDestroyed) return@thread
+                val costMs = System.currentTimeMillis() - startedAt
                 runOnUiThread {
                     if (!isFinishing && !isDestroyed) {
+                        loadingDetail.append("\n\n挂载完成 · ${costMs}ms")
                         loadingView.visibility = View.GONE
                         RNBundleMount.forwardOnHostResume(this)
                     }
@@ -161,6 +189,67 @@ class RNContainerActivity : AppCompatActivity(), DefaultHardwareBackBtnHandler {
                 }
             }
         }
+    }
+
+    private fun updateLoading(title: String, detail: String) {
+        runOnUiThread {
+            if (isFinishing || isDestroyed) return@runOnUiThread
+            loadingTitle.text = title
+            loadingDetail.text = detail
+        }
+    }
+
+    private fun showResolvedPaths(request: RNBundleMount.Request) {
+        val channel = intent.getStringExtra(EXTRA_CHANNEL).orEmpty()
+            .ifBlank { RNAssetBundleHelper.readBuildChannel(this) }
+        val bundleKey = intent.getStringExtra(EXTRA_BUNDLE_KEY)
+            ?: intent.getStringExtra(EXTRA_MODULE_NAME)
+            ?: request.moduleName
+        val commonPath = request.commonBundlePathOrUrl
+        val pagePath = request.pageBundlePathOrUrl
+        val commonSize = commonPath?.let { formatBytes(fileLength(it)) } ?: "-"
+        val pageSize = formatBytes(fileLength(pagePath))
+        val mode = if (request.useSplitPageBundle && !commonPath.isNullOrBlank()) {
+            "common + page（运行时合并）"
+        } else {
+            "单 page"
+        }
+        val detail = buildString {
+            appendLine("channel: $channel")
+            appendLine("bundleKey / module: $bundleKey / ${request.moduleName}")
+            appendLine("模式: $mode")
+            appendLine()
+            appendLine("① common")
+            appendLine(commonPath ?: "(无)")
+            appendLine("大小: $commonSize")
+            appendLine()
+            appendLine("② page")
+            appendLine(pagePath)
+            appendLine("大小: $pageSize")
+            appendLine()
+            append("顺序: 解析 → 读盘/下载 → 合并(如需) → ReactHost → Surface")
+        }
+        updateLoading("正在加载包…", detail)
+    }
+
+    private fun fileLength(pathOrUrl: String): Long {
+        return try {
+            if (pathOrUrl.startsWith("http://") || pathOrUrl.startsWith("https://")) {
+                -1L
+            } else {
+                File(pathOrUrl).takeIf { it.exists() }?.length() ?: -1L
+            }
+        } catch (_: Exception) {
+            -1L
+        }
+    }
+
+    private fun formatBytes(bytes: Long): String {
+        if (bytes < 0) return "未知/远程"
+        if (bytes < 1024) return "${bytes} B"
+        val kb = bytes / 1024.0
+        if (kb < 1024) return String.format("%.1f KB", kb)
+        return String.format("%.2f MB", kb / 1024.0)
     }
 
     /** 关闭容器回到原生（栈底 / 导航栏返回） */
@@ -276,7 +365,11 @@ class RNContainerActivity : AppCompatActivity(), DefaultHardwareBackBtnHandler {
     }
 
     private fun dp(value: Int): Int {
-        return (value * resources.displayMetrics.density).toInt()
+        return TypedValue.applyDimension(
+            TypedValue.COMPLEX_UNIT_DIP,
+            value.toFloat(),
+            resources.displayMetrics,
+        ).toInt()
     }
 
     companion object {

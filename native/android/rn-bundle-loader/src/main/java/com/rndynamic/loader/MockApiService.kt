@@ -34,14 +34,12 @@ object MockApiService {
             .put("order", 0)
     }
 
-    /** 模拟 GET /api/shell/config — 每次随机展示部分 RN 入口 */
+    /** 模拟 GET /api/shell/config — 固定展示全部 RN 入口 */
     @Throws(InterruptedException::class)
     fun fetchShellConfig(channel: String = "master"): ShellConfigFile {
         Thread.sleep(400)
-        val shuffled = allEntries.shuffled(Random(System.currentTimeMillis()))
         val bizEntries = JSONArray()
-        val count = Random.nextInt(2, minOf(5, shuffled.size + 1))
-        shuffled.take(count).forEachIndexed { index, item ->
+        allEntries.forEachIndexed { index, item ->
             bizEntries.put(
                 JSONObject(item.toString()).put("order", index),
             )
