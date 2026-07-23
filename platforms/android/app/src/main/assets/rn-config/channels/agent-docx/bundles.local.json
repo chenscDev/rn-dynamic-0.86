@@ -1,0 +1,125 @@
+{
+  "rnVersion": "0.86.0",
+  "baseVersion": "0.1.0",
+  "channel": "agent-docx",
+  "updatedAt": "2026-07-23T02:49:56.000Z",
+  "bundles": {
+    "common": [
+      {
+        "key": "common",
+        "name": "common",
+        "componentName": "common",
+        "url": "embedded://rn-bundles/agent-docx/common/common.android.fb2c787a3181.bundle",
+        "assetsUrl": "rn-bundles/agent-docx/common/common.android.fb2c787a3181.bundle",
+        "hash": "fb2c787a3181",
+        "platform": "android",
+        "kind": "common"
+      }
+    ],
+    "login": [
+      {
+        "key": "login",
+        "name": "登录",
+        "componentName": "login",
+        "url": "embedded://rn-bundles/agent-docx/login/login.android.22067ae391a3.bundle",
+        "assetsUrl": "rn-bundles/agent-docx/login/login.android.22067ae391a3.bundle",
+        "hash": "22067ae391a3",
+        "platform": "android",
+        "kind": "page",
+        "dependsOn": [
+          "common"
+        ]
+      }
+    ],
+    "home": [
+      {
+        "key": "home",
+        "name": "Home",
+        "componentName": "home",
+        "url": "embedded://rn-bundles/agent-docx/home/home.android.fb101002e1cf.bundle",
+        "assetsUrl": "rn-bundles/agent-docx/home/home.android.fb101002e1cf.bundle",
+        "hash": "fb101002e1cf",
+        "platform": "android",
+        "kind": "page",
+        "dependsOn": [
+          "common"
+        ]
+      }
+    ],
+    "order": [
+      {
+        "key": "order",
+        "name": "订单",
+        "componentName": "order",
+        "url": "embedded://rn-bundles/agent-docx/order/order.android.9a3e66f82f67.bundle",
+        "assetsUrl": "rn-bundles/agent-docx/order/order.android.9a3e66f82f67.bundle",
+        "hash": "9a3e66f82f67",
+        "platform": "android",
+        "kind": "page",
+        "dependsOn": [
+          "common"
+        ]
+      }
+    ],
+    "demo": [
+      {
+        "key": "demo",
+        "name": "Demo",
+        "componentName": "demo",
+        "url": "embedded://rn-bundles/agent-docx/demo/demo.android.ea4df5504dc7.bundle",
+        "assetsUrl": "rn-bundles/agent-docx/demo/demo.android.ea4df5504dc7.bundle",
+        "hash": "ea4df5504dc7",
+        "platform": "android",
+        "kind": "page",
+        "dependsOn": [
+          "common"
+        ]
+      }
+    ],
+    "profile": [
+      {
+        "key": "profile",
+        "name": "我的资料",
+        "componentName": "profile",
+        "url": "embedded://rn-bundles/agent-docx/profile/profile.android.aaebaf129730.bundle",
+        "assetsUrl": "rn-bundles/agent-docx/profile/profile.android.aaebaf129730.bundle",
+        "hash": "aaebaf129730",
+        "platform": "android",
+        "kind": "page",
+        "dependsOn": [
+          "common"
+        ]
+      }
+    ],
+    "wallet": [
+      {
+        "key": "wallet",
+        "name": "钱包",
+        "componentName": "wallet",
+        "url": "embedded://rn-bundles/agent-docx/wallet/wallet.android.c35d3f6fbdeb.bundle",
+        "assetsUrl": "rn-bundles/agent-docx/wallet/wallet.android.c35d3f6fbdeb.bundle",
+        "hash": "c35d3f6fbdeb",
+        "platform": "android",
+        "kind": "page",
+        "dependsOn": [
+          "common"
+        ]
+      }
+    ],
+    "message": [
+      {
+        "key": "message",
+        "name": "消息",
+        "componentName": "message",
+        "url": "embedded://rn-bundles/agent-docx/message/message.android.a18b5c778fb7.bundle",
+        "assetsUrl": "rn-bundles/agent-docx/message/message.android.a18b5c778fb7.bundle",
+        "hash": "a18b5c778fb7",
+        "platform": "android",
+        "kind": "page",
+        "dependsOn": [
+          "common"
+        ]
+      }
+    ]
+  }
+}

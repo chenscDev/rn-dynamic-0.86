@@ -83,9 +83,9 @@ yarn start
 | DevServer | **打开** |
 | 加载 common | **打开** |
 
-- [ ] 点「打开分包」能出 RN 页面
-- [ ] 改 `rn-biz-0.86/src/**` 保存后 Reload / 热更新生效
-- [ ] 摇一摇能出 Dev Menu（Reload、Open DevTools）
+- [ ] 点「打开分包」能出 RN 页面（Metro 直连，支持热更新）
+- [ ] 改 `rn-biz-0.86/src/**` 保存后 Fast Refresh / 摇一摇 Reload 生效
+- [ ] 摇一摇能出 Dev Menu（Reload、Open Debugger / DevTools）
 
 Intent 正式入口（可选）：
 
@@ -152,19 +152,20 @@ CDN 路径约定：`rn/{rnVersion}/{channel}/{key}/{platform}/...`
 
 ---
 
-## H. 本仓库一键打蒲公英 APK
+## H. 本仓库一键打 APK
 
 本机需已安装 **Android Studio**（含 SDK）与 JDK。
 
 ```bash
 cd rn-dynamic-0.86
+
+# 蒲公英内测（internalRelease）
 ./scripts/build-pgyer-apk.sh
+# 产物：project/dist/apk/RnDynamicBase-internal-release.apk
+
+# 本地调试 / 浏览器 DevTools（internalDebug）
+./scripts/build-debug-apk.sh
+# 产物：project/dist/apk/RnDynamicBase-internal-debug.apk
 ```
 
-产物路径（直接上传蒲公英）：
-
-```text
-project/dist/apk/RnDynamicBase-internal-release.apk
-```
-
-说明：该包为 `internalRelease` 内测壳（包名 `com.rndynamicbase`）。原生 Tab（首页/我的）安装即可用；RN 联调从「我的 → RN 调试入口」连电脑 Metro。完整业务宿主调试入口仍按上文 A–D 接入你们自己的 App。
+说明：包名均为 `com.rndynamicbase`。原生 Tab（首页/我的）安装即可用；RN 联调从「我的 → RN 调试入口」连电脑 Metro。需要 Metro 按 `j` 开浏览器 DevTools 时请用 **debug** 包。完整业务宿主调试入口仍按上文 A–D 接入你们自己的 App。

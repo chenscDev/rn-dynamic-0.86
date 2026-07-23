@@ -1,10 +1,14 @@
 import UIKit
 
+#if canImport(React)
+import React
+#endif
+
 /**
  本地 / 测试环境调试入口页面
 
- - 本地：填写 host + port + key，走 Metro（双 URL：common + page）
- - 测试：关闭 DevServer，填写测试环境分包 URL
+ - 本地：填写 host + port + key，Metro 直连 page（Fast Refresh + Dev Menu）
+ - 测试：关闭 DevServer，填写测试环境分包 URL / channel
  - platform 固定为 ios（由本控制器所在宿主标识）
  */
 public final class RNDebugEntryViewController: UIViewController {
@@ -111,12 +115,13 @@ public final class RNDebugEntryViewController: UIViewController {
     }
 
     private func refreshInfo() {
-        let mode = devSwitch.isOn ? "本地 Metro（双包调试）" : "测试包 / channel CDN"
+        let mode = devSwitch.isOn
+            ? "本地 Metro 直连（Fast Refresh + 摇一摇 Dev Menu）"
+            : "测试包 / channel CDN"
         infoLabel.text = """
         模式: \(mode)
         platform: ios（宿主标识）
-        channel: 发测/正式拉 CDN 时使用；Metro 调试用当前工作区源码
-        common: http://host:port/packages/common/src/index.bundle?platform=ios&dev=true
+        Metro：仅挂载 page 全量包 http URL（不预下载、不拼 common）
         page:   http://host:port/src/key/index.bundle?platform=ios&dev=true
         CDN:    rn/0.86.0/{channel}/{key}/ios/...
         """
@@ -127,13 +132,14 @@ public final class RNDebugEntryViewController: UIViewController {
         let port = Int(portField.text ?? "8081") ?? 8081
         let key = (keyField.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         let channel = (channelField.text ?? "main").trimmingCharacters(in: .whitespacesAndNewlines)
+        let host = (hostField.text ?? "localhost").trimmingCharacters(in: .whitespacesAndNewlines)
         guard !key.isEmpty else {
             infoLabel.text = "请填写分包 key"
             return
         }
 
         let request = RNDebugEntryRequest(
-            host: hostField.text ?? "localhost",
+            host: host,
             port: port,
             key: key,
             platform: "ios",
@@ -141,7 +147,11 @@ public final class RNDebugEntryViewController: UIViewController {
             useDevServer: devSwitch.isOn,
             bundleURL: urlField.text,
             loadCommon: commonSwitch.isOn,
-            initialProps: ["fromNative": "debug-entry", "channel": channel, "metroHost": hostField.text ?? "localhost"]
+            initialProps: [
+                "fromNative": "debug-entry",
+                "channel": channel,
+                "metroHost": host,
+            ]
         )
 
         if request.useDevServer {
@@ -149,8 +159,12 @@ public final class RNDebugEntryViewController: UIViewController {
                 infoLabel.text = "无法构造 Metro page URL"
                 return
             }
-            let commonURL = request.loadCommon ? request.metroCommonBundleURL : nil
-            presentMounted(pageURL: pageURL, commonURL: commonURL, moduleName: key, props: request.initialProps)
+            // 配置 packager，供摇一摇 / Reload / DevTools 连接电脑 Metro
+            #if canImport(React)
+            RCTBundleURLProvider.sharedSettings().jsLocation = "\(host):\(port)"
+            #endif
+            // 直连 Metro page 全量包（不要双包拼装，否则无热更新）
+            presentMounted(pageURL: pageURL, commonURL: nil, moduleName: key, props: request.initialProps)
         } else if let root = configRootURL {
             // 非 DevServer：按 channel 读配置并正式挂载
             do {

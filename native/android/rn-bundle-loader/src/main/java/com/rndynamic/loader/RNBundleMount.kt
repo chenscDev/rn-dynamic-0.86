@@ -1,7 +1,9 @@
 package com.rndynamic.loader
 
 import android.app.Activity
+import android.net.Uri
 import android.os.Bundle
+import android.preference.PreferenceManager
 import android.util.Log
 import android.view.View
 import android.view.ViewGroup
@@ -17,6 +19,7 @@ import com.facebook.react.fabric.ComponentFactory
 import com.facebook.react.interfaces.fabric.ReactSurface
 import com.facebook.react.modules.core.DefaultHardwareBackBtnHandler
 import com.facebook.react.interfaces.TaskInterface
+import com.facebook.react.packagerconnection.PackagerConnectionSettings
 import com.facebook.react.runtime.ReactHostImpl
 import com.facebook.react.runtime.hermes.HermesInstance
 import java.io.File
@@ -44,6 +47,11 @@ object RNBundleMount {
          */
         val useSplitPageBundle: Boolean = true,
         val initialProps: Bundle? = null,
+        /**
+         * Metro 入口模块路径（如 src/docs-agent/index）。
+         * 为空且 page 为 http URL 时，从 URL path 自动解析。
+         */
+        val jsMainModulePath: String? = null,
     )
 
     class MountException(message: String, cause: Throwable? = null) : Exception(message, cause)
@@ -139,12 +147,27 @@ object RNBundleMount {
 
     private fun mountSingle(activity: Activity, container: ViewGroup, request: Request): View {
         val pageSource = request.pageBundlePathOrUrl
+        val metroLive = isHttp(pageSource)
+        val jsMainModulePath = request.jsMainModulePath?.takeIf { it.isNotBlank() }
+            ?: if (metroLive) jsMainModulePathFromMetroUrl(pageSource) else "index"
+
+        // 直连 Metro：写入 debug_http_host，启用 Fast Refresh / 摇一摇 Dev Menu
+        if (metroLive) {
+            configurePackagerHost(activity, pageSource)
+            Log.i(
+                "RNBundleMount",
+                "Metro 直连 module=${request.moduleName} jsMain=$jsMainModulePath url=$pageSource",
+            )
+        }
+
+        // 仍下载一份作 Metro 不可达时的兜底；DevSupport 优先从 packager 拉包
         val pageLocal = resolveToLocalFile(activity, pageSource)
         val reactHost = createReactHost(
             activity = activity,
             bundlePath = pageLocal,
-            sourceUrl = if (isHttp(pageSource)) pageSource else null,
-            useDevSupport = isHttp(pageSource),
+            sourceUrl = if (metroLive) pageSource else null,
+            useDevSupport = metroLive,
+            jsMainModulePath = jsMainModulePath,
         )
         return attachSurface(activity, container, reactHost, request.moduleName, request.initialProps)
     }
@@ -325,6 +348,7 @@ object RNBundleMount {
         bundlePath: String,
         sourceUrl: String?,
         useDevSupport: Boolean,
+        jsMainModulePath: String = "index",
     ): ReactHostImpl {
         val packages = HostPackageRegistry.packages(activity.application)
         val loader = if (!sourceUrl.isNullOrBlank()) {
@@ -334,7 +358,7 @@ object RNBundleMount {
         }
 
         val delegate = DefaultReactHostDelegate(
-            jsMainModulePath = "index",
+            jsMainModulePath = jsMainModulePath,
             jsBundleLoader = loader,
             reactPackages = packages,
             jsRuntimeFactory = HermesInstance(),
@@ -358,9 +382,42 @@ object RNBundleMount {
             activity.applicationContext,
             delegate,
             componentFactory,
-            allowPackagerServerAccess = true,
+            allowPackagerServerAccess = useDevSupport,
             useDevSupport = useDevSupport,
         )
+    }
+
+    /**
+     * 配置 Metro packager 地址，供 DevSupport / HMR / 摇一摇菜单连接。
+     * URL 示例：http://10.157.20.204:8081/src/docs-agent/index.bundle?...
+     */
+    @Suppress("DEPRECATION")
+    private fun configurePackagerHost(activity: Activity, metroBundleUrl: String) {
+        val uri = Uri.parse(metroBundleUrl)
+        val host = uri.host?.trim().orEmpty()
+        if (host.isEmpty()) {
+            return
+        }
+        val port = if (uri.port > 0) uri.port else 8081
+        val debugHost = "$host:$port"
+        val appContext = activity.applicationContext
+        PreferenceManager.getDefaultSharedPreferences(appContext)
+            .edit()
+            .putString(PREFS_DEBUG_SERVER_HOST_KEY, debugHost)
+            .commit()
+        val settings = PackagerConnectionSettings(appContext)
+        settings.resetDebugServerHost()
+        settings.debugServerHost = debugHost
+        Log.i("RNBundleMount", "已配置 debug_http_host=$debugHost")
+    }
+
+    /** 从 Metro bundle URL 解析 jsMainModulePath */
+    private fun jsMainModulePathFromMetroUrl(metroBundleUrl: String): String {
+        val path = Uri.parse(metroBundleUrl).path?.trim('/').orEmpty()
+        if (path.isEmpty()) {
+            return "index"
+        }
+        return path.removeSuffix(".bundle").ifBlank { "index" }
     }
 
     private fun waitForTask(task: TaskInterface<*>, label: String) {
@@ -464,4 +521,6 @@ object RNBundleMount {
     fun metroCommonUrl(host: String, port: Int, platform: String = "android"): String {
         return "http://$host:$port/packages/common/src/index.bundle?platform=$platform&dev=true&minify=false"
     }
+
+    private const val PREFS_DEBUG_SERVER_HOST_KEY = "debug_http_host"
 }

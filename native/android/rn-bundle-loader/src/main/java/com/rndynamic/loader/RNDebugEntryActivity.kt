@@ -74,7 +74,7 @@ class RNDebugEntryActivity : AppCompatActivity() {
             minHeight = dp(48)
         }
         val commonSwitch = Switch(this).apply {
-            text = "预拉取 common（Metro 挂载仍用 page 全量包）"
+            text = "预拉取 common（仅 CDN/非 Metro；Metro 直连忽略）"
             isChecked = prefs.getBoolean(KEY_COMMON, true)
             minHeight = dp(48)
         }
@@ -89,7 +89,7 @@ class RNDebugEntryActivity : AppCompatActivity() {
 
         fun refreshInfo() {
             val mode = if (devSwitch.isChecked) {
-                "本地 Metro（代码以电脑 rn-biz 当前分支为准）"
+                "本地 Metro 直连（Fast Refresh + 摇一摇 Dev Menu；代码以电脑 rn-biz 为准）"
             } else {
                 "channel CDN / 内置 assets（输入分支优先，找不到回退 master）"
             }
@@ -97,7 +97,7 @@ class RNDebugEntryActivity : AppCompatActivity() {
                 模式: $mode
                 platform: android
                 channel: 以本页输入为准；CDN/内置包路径 rn/.../{channel}/...
-                Metro 模式下 channel 会写入 initialProps，JS 仍来自电脑 Metro 服务
+                Metro：传 http URL 挂载，不再下载成 file（支持热更新）
                 CDN: rn/0.86.0/{channel}/{key}/android/...
                 Metro 必须在 rn-biz-0.86 目录执行 yarn start（不要用 rn-dynamic）
             """.trimIndent()
@@ -227,48 +227,20 @@ class RNDebugEntryActivity : AppCompatActivity() {
                     }
                     val port = portField.text.toString().toIntOrNull() ?: 8081
                     val pageUrl = RNBundleMount.metroPageUrl(host, port, key, "android")
-                    val commonUrl =
-                        if (commonSwitch.isChecked) {
-                            RNBundleMount.metroCommonUrl(host, port, "android")
-                        } else {
-                            null
-                        }
-                    openButton.isEnabled = false
-                    clearButton.isEnabled = false
-                    info.text = "正在从 Metro 拉取 bundle…（channel=$channelInput）"
-                    Thread {
-                        try {
-                            if (commonUrl != null) {
-                                runOnUiThread { info.text = "正在下载 common bundle…" }
-                                val commonLocal = RNBundleMount.resolveToLocalFile(this, commonUrl)
-                                runOnUiThread { info.text = "正在下载 page bundle…" }
-                                val pageLocal = RNBundleMount.resolveToLocalFile(this, pageUrl)
-                                runOnUiThread {
-                                    openMountActivity(
-                                        key, channelInput, pageLocal, commonLocal,
-                                        pageUrl, commonUrl, useSplit = false,
-                                        metroHost = host, metroPort = port,
-                                    )
-                                }
-                            } else {
-                                runOnUiThread { info.text = "正在下载 page bundle…" }
-                                val pageLocal = RNBundleMount.resolveToLocalFile(this, pageUrl)
-                                runOnUiThread {
-                                    openMountActivity(
-                                        key, channelInput, pageLocal, null,
-                                        pageUrl, null, useSplit = false,
-                                        metroHost = host, metroPort = port,
-                                    )
-                                }
-                            }
-                        } catch (error: Exception) {
-                            runOnUiThread {
-                                openButton.isEnabled = true
-                                clearButton.isEnabled = true
-                                info.text = "挂载失败: ${formatError(error)}"
-                            }
-                        }
-                    }.start()
+                    // Metro 直连：把 http URL 交给容器挂载（启用 DevSupport / HMR / 摇一摇）
+                    // 不再预先下载成 file://，否则无热更新、无 Dev Menu
+                    info.text = "Metro 直连打开…\n$pageUrl"
+                    openMountActivity(
+                        moduleName = key,
+                        channel = channelInput,
+                        pageLocal = pageUrl,
+                        commonLocal = null,
+                        pageUrl = pageUrl,
+                        commonUrl = null,
+                        useSplit = false,
+                        metroHost = host,
+                        metroPort = port,
+                    )
                 } else {
                     val directUrl = urlField.text.toString().trim()
                     openButton.isEnabled = false

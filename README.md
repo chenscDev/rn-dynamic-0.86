@@ -124,6 +124,14 @@ yarn install
 
 产物：`project/dist/apk/RnDynamicBase-internal-release.apk`（`internalRelease`，约 arm64）
 
+需要浏览器 DevTools（Metro 按 `j`）时打 Debug 包：
+
+```bash
+./scripts/build-debug-apk.sh
+```
+
+产物：`project/dist/apk/RnDynamicBase-internal-debug.apk`（`internalDebug`）
+
 安装后：
 
 - **首页 / 我的**：原生页，无需 Metro，装完即可查看
@@ -237,7 +245,8 @@ import { Foo } from './Foo';   // 不要写后缀
 | `yarn pack:build <key>` | 仅打包 |
 | `yarn pack:upload <key>` | 仅上传（更新配置 url） |
 | `yarn pack:publish <key>` | 打包 + 上传 |
-| `./scripts/build-pgyer-apk.sh` | 一键打 Android 内测 APK |
+| `./scripts/build-pgyer-apk.sh` | 一键打 Android 内测 Release APK（蒲公英） |
+| `./scripts/build-debug-apk.sh` | 一键打 Android 内测 Debug APK（DevTools） |
 
 Android 本地运行（带 `internal` flavor）：
 
