@@ -141,7 +141,7 @@ public final class RNDebugEntryViewController: UIViewController {
             useDevServer: devSwitch.isOn,
             bundleURL: urlField.text,
             loadCommon: commonSwitch.isOn,
-            initialProps: ["fromNative": "debug-entry", "channel": channel]
+            initialProps: ["fromNative": "debug-entry", "channel": channel, "metroHost": hostField.text ?? "localhost"]
         )
 
         if request.useDevServer {

@@ -137,7 +137,20 @@ class RNDebugEntryActivity : AppCompatActivity() {
             pageUrl: String,
             commonUrl: String?,
             useSplit: Boolean,
+            metroHost: String? = null,
+            metroPort: Int? = null,
         ) {
+            val props = Bundle().apply {
+                putString("fromNative", "debug-entry")
+                putString("channel", channel)
+                // 动态分包挂载的是本地 file bundle，JS 侧靠此字段访问电脑后端
+                if (!metroHost.isNullOrBlank()) {
+                    putString("metroHost", metroHost.trim())
+                }
+                if (metroPort != null) {
+                    putInt("metroPort", metroPort)
+                }
+            }
             startActivity(
                 RNContainerActivity.intentForLocalPaths(
                     context = this,
@@ -149,6 +162,7 @@ class RNDebugEntryActivity : AppCompatActivity() {
                     fromNative = "debug-entry",
                 ).apply {
                     putExtra(RNContainerActivity.EXTRA_USE_SPLIT_PAGE, useSplit)
+                    putExtra(RNContainerActivity.EXTRA_PROPS, props)
                 },
             )
             openButton.isEnabled = true
@@ -157,6 +171,9 @@ class RNDebugEntryActivity : AppCompatActivity() {
                 append("已打开 RN 容器 channel=$channel split=$useSplit\n")
                 append("common=${commonUrl ?: "(无)"}\n")
                 append("page=$pageUrl")
+                if (!metroHost.isNullOrBlank()) {
+                    append("\nmetroHost=$metroHost")
+                }
             }
         }
 
@@ -230,6 +247,7 @@ class RNDebugEntryActivity : AppCompatActivity() {
                                     openMountActivity(
                                         key, channelInput, pageLocal, commonLocal,
                                         pageUrl, commonUrl, useSplit = false,
+                                        metroHost = host, metroPort = port,
                                     )
                                 }
                             } else {
@@ -239,6 +257,7 @@ class RNDebugEntryActivity : AppCompatActivity() {
                                     openMountActivity(
                                         key, channelInput, pageLocal, null,
                                         pageUrl, null, useSplit = false,
+                                        metroHost = host, metroPort = port,
                                     )
                                 }
                             }
