@@ -13,12 +13,21 @@
       "order": 0
     },
     {
+      "id": "chat",
+      "title": "问答",
+      "type": "rn-root",
+      "bundleKey": "docs-agent",
+      "icon": "ic_tab_chat",
+      "visible": true,
+      "order": 1
+    },
+    {
       "id": "biz",
       "title": "业务",
       "type": "rn-entries",
       "icon": "ic_tab_biz",
       "visible": true,
-      "order": 1,
+      "order": 2,
       "entries": [
         {
           "key": "home",

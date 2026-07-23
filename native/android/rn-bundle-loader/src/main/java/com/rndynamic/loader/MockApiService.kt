@@ -58,12 +58,22 @@ object MockApiService {
             )
             .put(
                 JSONObject()
+                    .put("id", "chat")
+                    .put("title", "问答")
+                    .put("type", "rn-root")
+                    .put("bundleKey", "docs-agent")
+                    .put("icon", "ic_tab_chat")
+                    .put("visible", true)
+                    .put("order", 1),
+            )
+            .put(
+                JSONObject()
                     .put("id", "biz")
                     .put("title", "业务")
                     .put("type", "rn-entries")
                     .put("icon", "ic_tab_biz")
                     .put("visible", true)
-                    .put("order", 1)
+                    .put("order", 2)
                     .put("entries", bizEntries),
             )
             .put(

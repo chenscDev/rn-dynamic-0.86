@@ -147,6 +147,17 @@ mkdir -p "$OUT_DIR"
 cp -f "$SRC_APK" "$OUT_APK"
 ls -lh "$OUT_APK"
 
+# 新包成功后清理同目录旧包，只保留本次产物
+echo "==> 清理旧 APK（仅保留本次产物）"
+shopt -s nullglob
+for old in "$OUT_DIR"/*.apk; do
+  if [[ "$(basename "$old")" != "$(basename "$OUT_APK")" ]]; then
+    echo "  remove: $old"
+    rm -f "$old"
+  fi
+done
+shopt -u nullglob
+
 echo ""
 echo "=========================================="
 echo "Debug APK 已就绪:"
@@ -155,8 +166,7 @@ echo "=========================================="
 echo "安装后（浏览器 DevTools）:"
 echo "  1. 电脑: cd rn-biz-0.86 && yarn start"
 echo "  2. 可选 USB: adb reverse tcp:8081 tcp:8081"
-echo "  3. App → 我的 → RN 调试入口 → Host=电脑IP Port=8081 Key=docs-agent"
-echo "  4. 开启 DevServer → 打开分包，保持页面在前台"
-echo "  5. Metro 终端按 j 打开 React Native DevTools"
+echo "  3. App → 底部「问答」Tab（Debug 直连 Metro；IP 见 assets/rn-config/metro-host.txt）"
+echo "  4. 需要 DevTools 时：Metro 终端按 j"
 echo "蒲公英发测仍用: ./scripts/build-pgyer-apk.sh"
 echo "详见: project/examples/host-app/ANDROID_DEBUG_CHECKLIST.md"

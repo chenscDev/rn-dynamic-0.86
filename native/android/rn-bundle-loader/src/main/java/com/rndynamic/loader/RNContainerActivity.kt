@@ -349,6 +349,11 @@ class RNContainerActivity : AppCompatActivity(), DefaultHardwareBackBtnHandler {
         super.onPause()
     }
 
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        RNBundleMount.forwardOnActivityResult(this, requestCode, resultCode, data)
+    }
+
     override fun onDestroy() {
         isActivityDestroyed = true
         RNBundleMount.forwardOnHostDestroy(this)

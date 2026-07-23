@@ -1,5 +1,6 @@
 package com.rndynamicbase
 
+import android.content.Intent
 import android.graphics.Typeface
 import android.os.Bundle
 import android.view.Gravity
@@ -9,12 +10,15 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
+import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.WindowCompat
 import androidx.fragment.app.Fragment
+import com.facebook.react.modules.core.DefaultHardwareBackBtnHandler
 import com.rndynamic.loader.AuthSession
 import com.rndynamic.loader.RNAssetBundleHelper
 import com.rndynamic.loader.MockApiService
+import com.rndynamic.loader.RNBundleMount
 import com.rndynamic.loader.RNEntryFragment
 import com.rndynamic.loader.RNRootTabFragment
 import com.rndynamic.loader.ShellConfigFile
@@ -28,7 +32,7 @@ import kotlin.concurrent.thread
 /**
  * 原生 Shell：Tab / RN 入口由 Mock 接口下发（固定全量入口）
  */
-class MainShellActivity : AppCompatActivity() {
+class MainShellActivity : AppCompatActivity(), DefaultHardwareBackBtnHandler {
     private val containerId = View.generateViewId()
     private var shellConfig: ShellConfigFile? = null
     private var configPath: String? = null
@@ -114,9 +118,27 @@ class MainShellActivity : AppCompatActivity() {
         setContentView(root)
         root.applySystemBarInsets(extraTopDp = 0)
 
+        // 问答等 rn-root Tab：先交给 RN 栈 pop，未处理再退到后台（不直接 finish 退出）
+        onBackPressedDispatcher.addCallback(
+            this,
+            object : OnBackPressedCallback(true) {
+                override fun handleOnBackPressed() {
+                    if (RNBundleMount.forwardOnBackPressed(this@MainShellActivity)) {
+                        return
+                    }
+                    moveTaskToBack(true)
+                }
+            },
+        )
+
         loadShellConfig(
             initialTab = intent.getStringExtra(EXTRA_INITIAL_TAB),
         )
+    }
+
+    /** RN 栈底无法再后退时回调：Shell 退到后台，保持进程 */
+    override fun invokeDefaultOnBackPressed() {
+        moveTaskToBack(true)
     }
 
     private fun loadShellConfig(initialTab: String?) {
@@ -279,6 +301,12 @@ class MainShellActivity : AppCompatActivity() {
 
     private fun dp(value: Int): Int {
         return (value * resources.displayMetrics.density).toInt()
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        // 文档选择器等依赖此回调，否则 RN pick() Promise 会一直挂起
+        RNBundleMount.forwardOnActivityResult(this, requestCode, resultCode, data)
     }
 
     companion object {

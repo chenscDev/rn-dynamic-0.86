@@ -116,6 +116,23 @@ object RNBundleMount {
     }
 
     /**
+     * Activity.onActivityResult 转发给 ReactHost。
+     * 文档选择器等 startActivityForResult 依赖此回调才能 resolve Promise。
+     */
+    @JvmStatic
+    fun forwardOnActivityResult(
+        activity: Activity,
+        requestCode: Int,
+        resultCode: Int,
+        data: android.content.Intent?,
+    ) {
+        val host = activeHostsByActivity[activity.hashCode()] ?: return
+        runOnUiThreadSyncFromAnyThread {
+            host.onActivityResult(activity, requestCode, resultCode, data)
+        }
+    }
+
+    /**
      * 在 container 中挂载 RN（必须在后台线程调用，禁止在主线程 waitForCompletion）。
      * - 仅 page：以 page 为入口 bundle
      * - common + page：合并为单脚本一次加载（避免二次 load 导致 registerPage 未执行）

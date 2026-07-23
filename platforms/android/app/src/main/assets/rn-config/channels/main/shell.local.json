@@ -1,7 +1,7 @@
 {
   "rnVersion": "0.86.0",
   "channel": "main",
-  "updatedAt": "2026-07-20T07:00:00.000Z",
+  "updatedAt": "2026-07-23T04:00:00.000Z",
   "tabs": [
     {
       "id": "home",
@@ -13,12 +13,21 @@
       "order": 0
     },
     {
+      "id": "chat",
+      "title": "问答",
+      "type": "rn-root",
+      "bundleKey": "docs-agent",
+      "icon": "ic_tab_chat",
+      "visible": true,
+      "order": 1
+    },
+    {
       "id": "biz",
       "title": "业务",
       "type": "rn-entries",
       "icon": "ic_tab_biz",
       "visible": true,
-      "order": 1,
+      "order": 2,
       "entries": [
         {
           "key": "home",

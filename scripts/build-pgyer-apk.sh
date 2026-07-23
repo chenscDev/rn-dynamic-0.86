@@ -148,6 +148,17 @@ mkdir -p "$OUT_DIR"
 cp -f "$SRC_APK" "$OUT_APK"
 ls -lh "$OUT_APK"
 
+# 新包成功后清理同目录旧包，只保留本次产物
+echo "==> 清理旧 APK（仅保留本次产物）"
+shopt -s nullglob
+for old in "$OUT_DIR"/*.apk; do
+  if [[ "$(basename "$old")" != "$(basename "$OUT_APK")" ]]; then
+    echo "  remove: $old"
+    rm -f "$old"
+  fi
+done
+shopt -u nullglob
+
 echo ""
 echo "=========================================="
 echo "蒲公英上传文件已就绪:"
@@ -157,7 +168,6 @@ echo "安装后:"
 echo "  · 首页 / 我的：原生页，无需 Metro"
 echo "RN 本地开发:"
 echo "  1. 电脑: cd rn-biz-0.86 && yarn start"
-echo "  2. App → 我的 → RN 调试入口"
-echo "  3. Host 填 <电脑IP>（或 adb reverse 后用 localhost）Port 8081 Key home"
-echo "  4. 开启 DevServer + 加载 common → 打开分包"
+echo "  2. App → 底部「问答」Tab（Debug 建议用 build-debug-apk.sh）"
+echo "  3. 或「我的 → RN 调试入口」连 Metro"
 echo "详见: project/examples/host-app/ANDROID_DEBUG_CHECKLIST.md"

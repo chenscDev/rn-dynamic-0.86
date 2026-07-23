@@ -119,6 +119,11 @@ class RNBundleHostActivity : AppCompatActivity(), DefaultHardwareBackBtnHandler 
         super.onPause()
     }
 
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: android.content.Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        RNBundleMount.forwardOnActivityResult(this, requestCode, resultCode, data)
+    }
+
     override fun onDestroy() {
         RNBundleMount.forwardOnHostDestroy(this)
         super.onDestroy()
