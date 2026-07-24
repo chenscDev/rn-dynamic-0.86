@@ -19,18 +19,20 @@ import com.rndynamic.loader.AuthSession
 import com.rndynamic.loader.RNAssetBundleHelper
 import com.rndynamic.loader.MockApiService
 import com.rndynamic.loader.RNBundleMount
+import com.rndynamic.loader.RNBundleRemoteSettingsStore
 import com.rndynamic.loader.RNEntryFragment
 import com.rndynamic.loader.RNRootTabFragment
 import com.rndynamic.loader.ShellConfigFile
 import com.rndynamic.loader.ShellConfigHolder
 import com.rndynamic.loader.ShellConfigStore
 import com.rndynamic.loader.ShellIconLoader
+import com.rndynamic.loader.ShellRemoteConfigStore
 import com.rndynamic.loader.ShellTabConfig
 import java.io.File
 import kotlin.concurrent.thread
 
 /**
- * 原生 Shell：Tab / RN 入口由 Mock 接口下发（固定全量入口）
+ * 原生 Shell：Tab / RN 入口优先远程配置，失败回退 assets / Mock
  */
 class MainShellActivity : AppCompatActivity(), DefaultHardwareBackBtnHandler {
     private val containerId = View.generateViewId()
@@ -144,9 +146,9 @@ class MainShellActivity : AppCompatActivity(), DefaultHardwareBackBtnHandler {
     }
 
     private fun loadShellConfig(initialTab: String?) {
-        thread(name = "MockShellConfig") {
+        thread(name = "ShellConfigLoad") {
             try {
-                val config = MockApiService.fetchShellConfig(buildChannel)
+                val config = resolveShellConfig()
                 ShellConfigHolder.config = config
                 runOnUiThread {
                     shellConfig = config
@@ -157,17 +159,8 @@ class MainShellActivity : AppCompatActivity(), DefaultHardwareBackBtnHandler {
                     tabId?.let { switchTab(it) }
                 }
             } catch (error: Exception) {
-                // Mock 失败时优先读当前 channel 的 shell；缺失则回退 master/main
-                val fallback = runCatching {
-                    ShellConfigStore.fromAssets(this, buildChannel).load()
-                }.recoverCatching {
-                    ShellConfigStore.fromAssets(this, "master").load()
-                }.recoverCatching {
-                    ShellConfigStore.fromAssets(this, "main").load()
-                }.getOrElse {
-                    // 最终兜底：用 Mock 再试一次（同步失败时至少保证有原生壳）
-                    MockApiService.fetchShellConfig(buildChannel)
-                }
+                // 最终兜底：保证至少有原生壳
+                val fallback = MockApiService.fetchShellConfig(buildChannel)
                 ShellConfigHolder.config = fallback
                 runOnUiThread {
                     shellConfig = fallback
@@ -177,6 +170,27 @@ class MainShellActivity : AppCompatActivity(), DefaultHardwareBackBtnHandler {
                     fallback.visibleTabs.firstOrNull()?.let { switchTab(it.id) }
                 }
             }
+        }
+    }
+
+    /**
+     * 加载顺序：远程 Shell → assets(channel) → master/main → Mock
+     */
+    private fun resolveShellConfig(): ShellConfigFile {
+        val remoteSettings = RNBundleRemoteSettingsStore.load(this, buildChannel)
+        if (remoteSettings.isUsable()) {
+            runCatching {
+                return ShellRemoteConfigStore.fetch(this, buildChannel, remoteSettings)
+            }
+        }
+        return runCatching {
+            ShellConfigStore.fromAssets(this, buildChannel).load()
+        }.recoverCatching {
+            ShellConfigStore.fromAssets(this, "master").load()
+        }.recoverCatching {
+            ShellConfigStore.fromAssets(this, "main").load()
+        }.getOrElse {
+            MockApiService.fetchShellConfig(buildChannel)
         }
     }
 

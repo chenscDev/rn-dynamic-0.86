@@ -34,7 +34,7 @@ object MockApiService {
             .put("order", 0)
     }
 
-    /** 模拟 GET /api/shell/config — 固定展示全部 RN 入口 */
+    /** 模拟 GET /api/shell/config — 仅作离线兜底；正式路径走 ShellRemoteConfigStore */
     @Throws(InterruptedException::class)
     fun fetchShellConfig(channel: String = "master"): ShellConfigFile {
         Thread.sleep(400)
