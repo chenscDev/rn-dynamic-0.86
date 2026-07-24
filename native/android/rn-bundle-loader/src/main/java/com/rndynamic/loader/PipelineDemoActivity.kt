@@ -276,7 +276,7 @@ class PipelineDemoActivity : AppCompatActivity() {
             · 挂载：恢复真正「预加载 common + 二次注入 page」，减少合并 IO
             · 网络：CDN hash 命中跳过下载；启动预拉 hot keys
             · Shell：配置缓存，减少每次 Mock 400ms
-            · 构建：pack-admin 看产物体积；CI 阻断 common 过大
+            · 构建：rn-release-admin 看产物体积；CI 阻断 common 过大
         """.trimIndent()
     }
 }

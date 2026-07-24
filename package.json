@@ -19,7 +19,7 @@
     "pack:upload:all": "node packages/bundler/bin/rn-pack.js upload:all",
     "pack:publish": "node packages/bundler/bin/rn-pack.js publish",
     "prepare": "husky",
-    "pack:admin": "node project/pack-admin/server.js",
+    "pack:admin": "node -e \"console.log('\\n[已迁移] 打包管理后台请使用同级仓库 rn-release-admin:\\n  cd ../rn-release-admin && yarn dev\\n  打开 http://127.0.0.1:5173\\n'); process.exit(0)\"",
     "lint:fix": "eslint \"app/**/*.{js,jsx,ts,tsx}\" \"src/**/*.{js,jsx,ts,tsx}\" \"packages/**/*.{js,ts,tsx}\" \"index.js\" --fix",
     "typecheck": "tsc --noEmit"
   },
