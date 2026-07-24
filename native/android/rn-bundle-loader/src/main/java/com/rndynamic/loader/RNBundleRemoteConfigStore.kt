@@ -76,6 +76,10 @@ class RNBundleRemoteConfigStore(
             connectTimeout = 15_000
             readTimeout = 15_000
             requestMethod = "GET"
+            // 热更配置禁止本地 HTTP 缓存，否则 Nginx 若误标 immutable 会导致永远拉旧 hash
+            useCaches = false
+            setRequestProperty("Cache-Control", "no-cache")
+            setRequestProperty("Pragma", "no-cache")
             setRequestProperty("Accept", "application/json")
             // 部分 CDN/WAF 对无 UA 的请求返回 403
             setRequestProperty("User-Agent", "RnDynamicBundle/0.86")

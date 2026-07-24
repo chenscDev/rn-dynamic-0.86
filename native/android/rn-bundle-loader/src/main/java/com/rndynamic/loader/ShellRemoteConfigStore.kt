@@ -53,6 +53,9 @@ object ShellRemoteConfigStore {
             connectTimeout = 12_000
             readTimeout = 12_000
             requestMethod = "GET"
+            useCaches = false
+            setRequestProperty("Cache-Control", "no-cache")
+            setRequestProperty("Pragma", "no-cache")
             setRequestProperty("Accept", "application/json")
             setRequestProperty("User-Agent", "RnDynamicShell/0.86")
         }
