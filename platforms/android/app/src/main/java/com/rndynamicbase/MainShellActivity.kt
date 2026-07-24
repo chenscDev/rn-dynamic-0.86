@@ -73,20 +73,20 @@ class MainShellActivity : AppCompatActivity(), DefaultHardwareBackBtnHandler {
                     setPadding(0, dp(16), 0, dp(8))
                 },
             )
-            addView(
-                TextView(context).apply {
-                    text = buildString {
-                        appendLine("channel: $buildChannel")
-                        appendLine("配置目录: files/rn-config/channels/$buildChannel/")
-                        appendLine("· bundles.local.json")
-                        appendLine("· remote.local.json")
-                        append("下一步: Mock shell → Tab 首页")
-                    }
-                    textSize = 12f
-                    setTextColor(0xFF555555.toInt())
-                    setLineSpacing(0f, 1.25f)
-                },
-            )
+            if (BuildConfig.SHOW_RN_DEBUG_ENTRY) {
+                addView(
+                    TextView(context).apply {
+                        text = buildString {
+                            appendLine("channel: $buildChannel")
+                            appendLine("配置目录: files/rn-config/channels/$buildChannel/")
+                            append("测试包可点右下角切换远程/本地资源")
+                        }
+                        textSize = 12f
+                        setTextColor(0xFF555555.toInt())
+                        setLineSpacing(0f, 1.25f)
+                    },
+                )
+            }
         }
 
         val root = FrameLayout(this).apply {
@@ -117,6 +117,8 @@ class MainShellActivity : AppCompatActivity(), DefaultHardwareBackBtnHandler {
 
         setContentView(root)
         root.applySystemBarInsets(extraTopDp = 0)
+        // Debug：右下角悬浮切换资源「远程 CDN / 本地 Metro」
+        RnResourceSourceOverlay.attach(this, root)
 
         // 问答等 rn-root Tab：先交给 RN 栈 pop，未处理再退到后台（不直接 finish 退出）
         onBackPressedDispatcher.addCallback(

@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
-# 构建 Android 内测 Debug APK（internalDebug）
+# 构建 Android 测试 Debug APK（internalDebug）
 #
 # 与 build-pgyer-apk.sh（internalRelease）的区别：
-# - Debug 包：ReactBuildConfig.DEBUG=true，支持浏览器 DevTools（Metro 按 j）
-# - Release 内测包：适合蒲公英发测；Dev Menu / 热更新可用，但浏览器 DevTools 常连不上
+# - 包名 com.rndynamicbase.debug，桌面名「RnDynamic 测试」，可与线上并装
+# - 右下角悬浮：远程 CDN（默认）/ 本地 Metro；「我的」保留 RN 调试入口
 #
 # 用法（在仓库根目录）：
 #   ./scripts/build-debug-apk.sh
+# 同时打测试+线上：
+#   ./scripts/build-pgyer-both.sh
 #
 # 产物：
 #   project/dist/apk/RnDynamicBase-internal-debug.apk
@@ -147,26 +149,16 @@ mkdir -p "$OUT_DIR"
 cp -f "$SRC_APK" "$OUT_APK"
 ls -lh "$OUT_APK"
 
-# 新包成功后清理同目录旧包，只保留本次产物
-echo "==> 清理旧 APK（仅保留本次产物）"
-shopt -s nullglob
-for old in "$OUT_DIR"/*.apk; do
-  if [[ "$(basename "$old")" != "$(basename "$OUT_APK")" ]]; then
-    echo "  remove: $old"
-    rm -f "$old"
-  fi
-done
-shopt -u nullglob
+# 保留另一环境 APK（debug/release 可并存于 dist/apk）
 
 echo ""
 echo "=========================================="
-echo "Debug APK 已就绪:"
+echo "Debug/测试 APK 已就绪:"
 echo "  $OUT_APK"
+echo "  applicationId = com.rndynamicbase.debug"
 echo "=========================================="
-echo "安装后（浏览器 DevTools）:"
-echo "  1. 电脑: cd rn-biz-0.86 && yarn start"
-echo "  2. 可选 USB: adb reverse tcp:8081 tcp:8081"
-echo "  3. App → 底部「问答」Tab（Debug 直连 Metro；IP 见 assets/rn-config/metro-host.txt）"
-echo "  4. 需要 DevTools 时：Metro 终端按 j"
-echo "蒲公英发测仍用: ./scripts/build-pgyer-apk.sh"
-echo "详见: project/examples/host-app/ANDROID_DEBUG_CHECKLIST.md"
+echo "  【无感热更 RN】publish 后请 rsync CDN，无需重装 APK："
+echo "    cd rn-biz-0.86 && yarn pack:publish docs-agent --platform android --channel agent-docx"
+echo "    ../rn-dynamic-0.86/scripts/sync-cdn-to-server.sh"
+echo "  （需 APK 已开启 remote.enabled；问答 Tab 已走 RNBundleResolver）"
+echo "详见: project/docs/PGYER_DUAL_ENV.md / docs-agent-server/docs/DEPLOY_GUIDE.md"

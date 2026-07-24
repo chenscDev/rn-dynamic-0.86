@@ -69,8 +69,9 @@ class RNDebugEntryActivity : AppCompatActivity() {
             minHeight = dp(48)
         }
         val devSwitch = Switch(this).apply {
-            text = "使用 DevServer（Metro）"
-            isChecked = prefs.getBoolean(KEY_DEV, true)
+            text = "使用 DevServer（Metro）= 本地"
+            // 与全局悬浮开关同源；默认远程
+            isChecked = RnBundleSourcePrefs.isLocalMetro(this@RNDebugEntryActivity)
             minHeight = dp(48)
         }
         val commonSwitch = Switch(this).apply {
@@ -104,13 +105,18 @@ class RNDebugEntryActivity : AppCompatActivity() {
         }
 
         fun savePrefs(channel: String) {
+            val useMetro = devSwitch.isChecked
             prefs.edit()
                 .putString(KEY_HOST, hostField.text.toString().trim())
                 .putString(KEY_PORT, portField.text.toString().trim().ifBlank { "8081" })
                 .putString(KEY_BUNDLE_KEY, keyField.text.toString().trim())
                 .putString(KEY_CHANNEL, channel)
                 .putString(KEY_URL, urlField.text.toString().trim())
-                .putBoolean(KEY_DEV, devSwitch.isChecked)
+                .putBoolean(KEY_DEV, useMetro)
+                .putString(
+                    RnBundleSourcePrefs.KEY_SOURCE,
+                    if (useMetro) RnBundleSourcePrefs.SOURCE_LOCAL else RnBundleSourcePrefs.SOURCE_REMOTE,
+                )
                 .putBoolean(KEY_COMMON, commonSwitch.isChecked)
                 .apply()
         }

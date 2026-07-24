@@ -1,16 +1,19 @@
 #!/usr/bin/env bash
-# 构建可上传蒲公英的 Android 内测 APK（internalRelease）
+# 构建可上传蒲公英的 Android 线上 APK（internalRelease）
 #
 # 特性：
-# - 原生 Tab 壳（首页 / 我的），安装即可查看，无需 Metro
-# - 「我的 → RN 调试入口」可连电脑 Metro 做 RN 本地开发
-# - internal flavor 允许 HTTP 访问 Metro
+# - 原生 Tab 壳；资源固定走远程 CDN / 内置，无调试悬浮与 RN 调试入口
+# - 包名 com.rndynamicbase，可与测试包（.debug）并装
 #
 # 用法（在仓库根目录）：
 #   ./scripts/build-pgyer-apk.sh
+# 同时打测试+线上：
+#   ./scripts/build-pgyer-both.sh
 #
 # 产物：
 #   project/dist/apk/RnDynamicBase-internal-release.apk
+# 说明：
+#   project/docs/PGYER_DUAL_ENV.md
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -148,26 +151,15 @@ mkdir -p "$OUT_DIR"
 cp -f "$SRC_APK" "$OUT_APK"
 ls -lh "$OUT_APK"
 
-# 新包成功后清理同目录旧包，只保留本次产物
-echo "==> 清理旧 APK（仅保留本次产物）"
-shopt -s nullglob
-for old in "$OUT_DIR"/*.apk; do
-  if [[ "$(basename "$old")" != "$(basename "$OUT_APK")" ]]; then
-    echo "  remove: $old"
-    rm -f "$old"
-  fi
-done
-shopt -u nullglob
+# 保留另一环境 APK（debug/release 可并存于 dist/apk）
 
 echo ""
 echo "=========================================="
-echo "蒲公英上传文件已就绪:"
+echo "Release/线上 APK 已就绪:"
 echo "  $OUT_APK"
+echo "  applicationId = com.rndynamicbase"
 echo "=========================================="
 echo "安装后:"
-echo "  · 首页 / 我的：原生页，无需 Metro"
-echo "RN 本地开发:"
-echo "  1. 电脑: cd rn-biz-0.86 && yarn start"
-echo "  2. App → 底部「问答」Tab（Debug 建议用 build-debug-apk.sh）"
-echo "  3. 或「我的 → RN 调试入口」连 Metro"
-echo "详见: project/examples/host-app/ANDROID_DEBUG_CHECKLIST.md"
+echo "  · 固定远程 CDN，无调试悬浮 / 无 RN 调试入口"
+echo "  · 与测试包可并装；双包: ./scripts/build-pgyer-both.sh"
+echo "详见: project/docs/PGYER_DUAL_ENV.md"

@@ -50,12 +50,35 @@ class RNBundleRemoteConfigStore(
 
     private fun fetchRemoteConfig(): RNBundlesConfigFile {
         val base = configBaseUrl.trimEnd('/')
-        val urlString = "$base/config/$rnVersion/$channel"
+        // 优先 .json（Nginx 静态文件）；兼容无后缀
+        val candidates = listOf(
+            "$base/config/$rnVersion/$channel.json",
+            "$base/config/$rnVersion/$channel",
+        )
+        var lastError: Exception? = null
+        for (urlString in candidates) {
+            try {
+                return fetchUrl(urlString)
+            } catch (error: Exception) {
+                lastError = error
+            }
+        }
+        if (cacheFile.exists()) {
+            return parseConfigFile(cacheFile.readText(Charsets.UTF_8))
+        }
+        throw RNBundleConfigException(
+            "远程配置拉取失败: ${lastError?.message ?: "unknown"} tried=${candidates.joinToString()}",
+        )
+    }
+
+    private fun fetchUrl(urlString: String): RNBundlesConfigFile {
         val connection = (URL(urlString).openConnection() as HttpURLConnection).apply {
             connectTimeout = 15_000
             readTimeout = 15_000
             requestMethod = "GET"
             setRequestProperty("Accept", "application/json")
+            // 部分 CDN/WAF 对无 UA 的请求返回 403
+            setRequestProperty("User-Agent", "RnDynamicBundle/0.86")
         }
 
         return try {
@@ -68,16 +91,6 @@ class RNBundleRemoteConfigStore(
             }
             val body = connection.inputStream.bufferedReader().use { it.readText() }
             parseConfigJson(body)
-        } catch (error: RNBundleConfigException) {
-            if (cacheFile.exists()) {
-                return parseConfigFile(cacheFile.readText(Charsets.UTF_8))
-            }
-            throw error
-        } catch (error: Exception) {
-            if (cacheFile.exists()) {
-                return parseConfigFile(cacheFile.readText(Charsets.UTF_8))
-            }
-            throw RNBundleConfigException("远程配置拉取失败: ${error.message}")
         } finally {
             connection.disconnect()
         }

@@ -1,9 +1,9 @@
 {
   "provider": "local",
-  "baseUrl": "http://127.0.0.1:8787",
+  "baseUrl": "http://47.93.207.70/cdn",
   "targetDir": "project/dist/cdn-local",
   "pathTemplate": "rn/{rnVersion}/{channel}/{key}/{platform}/{fileName}",
-  "defaultChannel": "master",
+  "defaultChannel": "agent-docx",
   "keepHistory": 5,
   "cdn": {
     "endpoint": "oss-cn-hangzhou.aliyuncs.com",
@@ -11,6 +11,6 @@
     "region": "oss-cn-hangzhou",
     "accessKeyEnv": "OSS_ACCESS_KEY_ID",
     "secretKeyEnv": "OSS_ACCESS_KEY_SECRET",
-    "comment": "provider=cdn 时使用；AK 从环境变量读取"
+    "comment": "演示期 local+rsync；baseUrl 指向公网 CDN 以开启无感热更"
   }
 }

@@ -31,6 +31,8 @@ CHANNEL="$(resolve_channel)"
 
 # 与 MockApiService.allEntries 保持一致
 PAGE_KEYS=(login home order demo profile wallet message)
+# 仅 CDN 下发、不嵌入 APK 的页面（问答 Tab 等）；从 rn-biz 已发布配置合并 URL
+CDN_ONLY_KEYS=(docs-agent)
 
 ASSETS_ROOT="$ROOT/platforms/android/app/src/main/assets"
 BUNDLES_ASSETS="$ASSETS_ROOT/rn-bundles/$CHANNEL"
@@ -132,9 +134,10 @@ cp -f "$COMMON_BUNDLE" "$CDN_LOCAL/rn/$RN_VERSION/$CHANNEL/common/$PLATFORM/$COM
 
 # 用 Node 生成 bundles.local.json 与 CDN config
 PAGE_META_JOINED="$(printf '%s\n' "${PAGE_META_LINES[@]}")"
+CDN_ONLY_JOINED="$(printf '%s\n' "${CDN_ONLY_KEYS[@]}")"
 export ROOT CHANNEL PLATFORM RN_VERSION UPDATED_AT CDN_BASE_URL
 export COMMON_HASH COMMON_ASSETS_URL COMMON_CDN_URL COMMON_NAME
-export PAGE_META_JOINED
+export PAGE_META_JOINED CDN_ONLY_JOINED RN_BIZ_ROOT
 
 node <<'NODE'
 const fs = require('fs');
@@ -142,7 +145,7 @@ const path = require('path');
 
 const {
   ROOT, CHANNEL, PLATFORM, RN_VERSION, UPDATED_AT, CDN_BASE_URL,
-  COMMON_HASH, COMMON_ASSETS_URL, COMMON_CDN_URL,
+  COMMON_HASH, COMMON_ASSETS_URL, COMMON_CDN_URL, RN_BIZ_ROOT,
 } = process.env;
 
 const pageMetaLines = (process.env.PAGE_META_JOINED || '').split('\n').filter(Boolean);
@@ -225,20 +228,66 @@ const bundlesConfig = {
   bundles,
 };
 
+// 合并 CDN-only 页面（如 docs-agent），避免打包脚本覆盖问答 Tab 配置
+const cdnOnlyKeys = (process.env.CDN_ONLY_JOINED || '').split('\n').filter(Boolean);
+const bizBundlesPath = path.join(
+  RN_BIZ_ROOT || '',
+  'project/config/channels',
+  CHANNEL,
+  'bundles.local.json',
+);
+let bizBundles = null;
+if (cdnOnlyKeys.length > 0 && bizBundlesPath && fs.existsSync(bizBundlesPath)) {
+  try {
+    bizBundles = JSON.parse(fs.readFileSync(bizBundlesPath, 'utf8'));
+  } catch (e) {
+    console.warn('警告: 无法读取 rn-biz bundles.local.json:', e.message);
+  }
+}
+for (const key of cdnOnlyKeys) {
+  const items = bizBundles && bizBundles.bundles && bizBundles.bundles[key];
+  if (!items || !items.length) {
+    console.warn(`警告: CDN-only 页面 ${key} 在 rn-biz 配置中不存在，已跳过`);
+    continue;
+  }
+  const src = items[0];
+  const entry = {
+    key: src.key || key,
+    name: src.name || key,
+    componentName: src.componentName || key,
+    url: src.url,
+    assetsUrl: src.assetsUrl || undefined,
+    hash: src.hash,
+    platform: src.platform || PLATFORM,
+    channel: CHANNEL,
+    kind: src.kind || 'page',
+    dependsOn: src.dependsOn || ['common'],
+  };
+  if (!entry.url || !String(entry.url).startsWith('http')) {
+    console.warn(`警告: CDN-only 页面 ${key} 的 url 不是 http(s)，已跳过: ${entry.url}`);
+    continue;
+  }
+  bundles[key] = [entry];
+  cdnBundles[key] = [entry];
+  console.log(`==> 已合并 CDN-only: ${key} → ${entry.url}`);
+}
+
 fs.writeFileSync(
   path.join(configAssets, 'bundles.local.json'),
   JSON.stringify(bundlesConfig, null, 2) + '\n',
 );
 
-// 真机默认关闭远程（避免连 127.0.0.1）；有 CDN 时可改为 enabled:true
+// 公网 CDN 默认开启远程配置（无感热更）；本机 127/localhost 关闭
+const remoteEnabled = !/^https?:\/\/(127\.|localhost)/i.test(CDN_BASE_URL);
 fs.writeFileSync(
   path.join(configAssets, 'remote.local.json'),
   JSON.stringify({
-    enabled: false,
+    enabled: remoteEnabled,
     baseUrl: CDN_BASE_URL,
     rnVersion: RN_VERSION,
   }, null, 2) + '\n',
 );
+console.log(`==> remote.local.json enabled=${remoteEnabled} baseUrl=${CDN_BASE_URL}`);
 
 const cdnConfig = {
   rnVersion: RN_VERSION,

@@ -19,22 +19,29 @@ class NativeHomeFragment : Fragment() {
         container: ViewGroup?,
         savedInstanceState: Bundle?,
     ): View {
+        val isDebug = BuildConfig.SHOW_RN_DEBUG_ENTRY
         val title = TextView(requireContext()).apply {
-            text = "欢迎使用 RnDynamic 内测壳"
+            text = if (isDebug) "欢迎使用 RnDynamic 测试壳" else "欢迎使用 RnDynamic"
             textSize = 22f
             setTypeface(typeface, Typeface.BOLD)
         }
         val body = TextView(requireContext()).apply {
-            text = """
-                这是原生首页，不依赖 Metro，安装后即可查看。
+            text = if (isDebug) {
+                """
+                这是原生首页，默认走远程 CDN，安装后即可查看。
 
-                如需 RN 本地开发：
-                1. 切到「我的」页
-                2. 进入「RN 调试入口」
-                3. 电脑执行 cd rn-biz-0.86 && yarn start
-                4. Host 填电脑局域网 IP（或 adb reverse 后用 localhost）
-                5. Port 8081，Key 如 home，打开 DevServer
-            """.trimIndent()
+                资源切换：点右下角悬浮「远程 / 本地」
+                · 远程：自动使用服务器，无需填写 IP
+                · 本地：填写电脑 IP，需 yarn start
+
+                详细调试：切到「我的」→「RN 调试入口」
+                """.trimIndent()
+            } else {
+                """
+                这是原生首页。
+                业务与问答页从服务器加载资源，无需本机开发服务。
+                """.trimIndent()
+            }
             textSize = 15f
             setLineSpacing(0f, 1.35f)
         }

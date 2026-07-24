@@ -1,0 +1,21 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- 仅 Debug/测试包注册调试相关页面；Release 不包含 -->
+    <application>
+        <activity
+            android:name="com.rndynamic.loader.PipelineDemoActivity"
+            android:label="分包全流程"
+            android:exported="false" />
+
+        <activity
+            android:name="com.rndynamic.loader.RNDebugEntryActivity"
+            android:label="RN 调试"
+            android:exported="false" />
+
+        <activity
+            android:name="com.rndynamic.loader.RNDebugMountActivity"
+            android:label="RN 分包"
+            android:configChanges="keyboard|keyboardHidden|orientation|screenLayout|screenSize|smallestScreenSize|uiMode"
+            android:windowSoftInputMode="adjustResize"
+            android:exported="false" />
+    </application>
+</manifest>

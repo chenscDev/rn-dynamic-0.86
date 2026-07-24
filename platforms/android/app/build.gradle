@@ -58,14 +58,19 @@ android {
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
         versionName "1.0"
+        // 远程 CDN 主机（与 assets/rn-config/cdn-host.txt 保持一致）
+        buildConfigField "String", "CDN_BASE_HOST", "\"47.93.207.70\""
+        // 默认按 release 收紧；debug buildType 再打开
+        buildConfigField "boolean", "SHOW_RN_DEBUG_ENTRY", "false"
+        buildConfigField "boolean", "SHOW_RESOURCE_SOURCE_FAB", "false"
+        buildConfigField "boolean", "FORCE_REMOTE_BUNDLES", "true"
     }
 
     flavorDimensions += "distribution"
     productFlavors {
         internal {
             dimension "distribution"
-            resValue "string", "app_name", "RnDynamic 内测"
-            buildConfigField "boolean", "SHOW_RN_DEBUG_ENTRY", "true"
+            // 允许 HTTP（CDN / Metro）；名称由 buildTypes 区分测试/线上
         }
     }
 
@@ -79,7 +84,14 @@ android {
     }
     buildTypes {
         debug {
+            // 与 release 不同包名，可同时安装「测试」「线上」两套
+            applicationIdSuffix ".debug"
+            versionNameSuffix "-debug"
             signingConfig signingConfigs.debug
+            resValue "string", "app_name", "RnDynamic 测试"
+            buildConfigField "boolean", "SHOW_RN_DEBUG_ENTRY", "true"
+            buildConfigField "boolean", "SHOW_RESOURCE_SOURCE_FAB", "true"
+            buildConfigField "boolean", "FORCE_REMOTE_BUNDLES", "false"
         }
         release {
             // Caution! In production, you need to generate your own keystore file.
@@ -87,6 +99,10 @@ android {
             signingConfig signingConfigs.debug
             minifyEnabled enableProguardInReleaseBuilds
             proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
+            resValue "string", "app_name", "RnDynamic"
+            buildConfigField "boolean", "SHOW_RN_DEBUG_ENTRY", "false"
+            buildConfigField "boolean", "SHOW_RESOURCE_SOURCE_FAB", "false"
+            buildConfigField "boolean", "FORCE_REMOTE_BUNDLES", "true"
         }
     }
 }

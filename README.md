@@ -114,35 +114,31 @@ yarn install
 
 ## 快速开始
 
-### 1. 打内测 APK 并扫码安装
+### 1. 打测试 / 线上 APK（可并装）
 
 本机需已安装 **Android Studio**（含 SDK）。脚本会自动使用 Android Studio JBR 作为 `JAVA_HOME`。
 
 ```bash
-./scripts/build-pgyer-apk.sh
+./scripts/build-pgyer-both.sh
 ```
 
-产物：`project/dist/apk/RnDynamicBase-internal-release.apk`（`internalRelease`，约 arm64）
+产物（蒲公英建议建两个应用分别上传，详见 `project/docs/PGYER_DUAL_ENV.md`）：
 
-需要浏览器 DevTools（Metro 按 `j`）时打 Debug 包：
-
-```bash
-./scripts/build-debug-apk.sh
-```
-
-产物：`project/dist/apk/RnDynamicBase-internal-debug.apk`（`internalDebug`）
+- `project/dist/apk/RnDynamicBase-internal-debug.apk` — **测试**（`com.rndynamicbase.debug`）
+- `project/dist/apk/RnDynamicBase-internal-release.apk` — **线上**（`com.rndynamicbase`）
 
 安装后：
 
-- **首页 / 我的**：原生页，无需 Metro，装完即可查看
-- **RN 本地开发**：我的 → RN 调试入口（见下文）
+- **测试包**：右下角悬浮切换远程 CDN / 本地 Metro；「我的」保留 RN 调试入口
+- **线上包**：固定远程 CDN，无调试功能
+- 两套包可同时装在同一部手机上
 
 手动构建：
 
 ```bash
 cd platforms/android
-./gradlew assembleInternalRelease   # 内测发布包（上传蒲公英）
-./gradlew assembleInternalDebug      # 本地调试
+./gradlew assembleInternalRelease   # 线上
+./gradlew assembleInternalDebug     # 测试
 ```
 
 > `internal` flavor 已配置 `usesCleartextTraffic=true`，允许 HTTP 访问 Metro（`http://局域网IP:8081`）。
@@ -245,8 +241,9 @@ import { Foo } from './Foo';   // 不要写后缀
 | `yarn pack:build <key>` | 仅打包 |
 | `yarn pack:upload <key>` | 仅上传（更新配置 url） |
 | `yarn pack:publish <key>` | 打包 + 上传 |
-| `./scripts/build-pgyer-apk.sh` | 一键打 Android 内测 Release APK（蒲公英） |
-| `./scripts/build-debug-apk.sh` | 一键打 Android 内测 Debug APK（DevTools） |
+| `./scripts/build-pgyer-both.sh` | 同时打测试 Debug + 线上 Release（可并装，蒲公英双应用） |
+| `./scripts/build-pgyer-apk.sh` | 仅线上 Release APK |
+| `./scripts/build-debug-apk.sh` | 仅测试 Debug APK（悬浮切换远程/本地） |
 
 Android 本地运行（带 `internal` flavor）：
 

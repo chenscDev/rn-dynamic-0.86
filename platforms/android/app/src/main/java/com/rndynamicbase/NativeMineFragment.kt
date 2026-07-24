@@ -17,7 +17,8 @@ import com.rndynamic.loader.PipelineDemoActivity
 import com.rndynamic.loader.RNDebugEntryActivity
 
 /**
- * 原生「我的」页：用户信息 + 退出登录 + RN 调试入口
+ * 原生「我的」页：用户信息 + 退出登录；
+ * 仅 Debug/测试包展示 RN 调试入口与分包演示。
  */
 class NativeMineFragment : Fragment() {
     override fun onCreateView(
@@ -39,6 +40,12 @@ class NativeMineFragment : Fragment() {
         userCard.addView(infoRow("昵称", AuthSession.getNickname() ?: "未登录"))
         userCard.addView(infoRow("用户 ID", AuthSession.getUserId() ?: "-"))
         userCard.addView(infoRow("应用版本", BuildConfig.VERSION_NAME))
+        userCard.addView(
+            infoRow(
+                "包名",
+                requireContext().packageName,
+            ),
+        )
 
         val logoutButton = Button(requireContext()).apply {
             text = "退出登录"
@@ -54,20 +61,6 @@ class NativeMineFragment : Fragment() {
             }
         }
 
-        val pipelineButton = Button(requireContext()).apply {
-            text = "分包全流程演示"
-            setOnClickListener {
-                startActivity(Intent(requireContext(), PipelineDemoActivity::class.java))
-            }
-        }
-
-        val debugButton = Button(requireContext()).apply {
-            text = "RN 调试入口"
-            setOnClickListener {
-                startActivity(Intent(requireContext(), RNDebugEntryActivity::class.java))
-            }
-        }
-
         return LinearLayout(requireContext()).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(24), dp(16), dp(24), dp(24))
@@ -75,8 +68,24 @@ class NativeMineFragment : Fragment() {
             addView(userCard, LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
             addView(logoutButton, LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
             addView(changePasswordButton, LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
-            addView(pipelineButton, LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
-            addView(debugButton, LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+
+            // Release/线上包不展示任何调试入口
+            if (BuildConfig.SHOW_RN_DEBUG_ENTRY) {
+                val pipelineButton = Button(requireContext()).apply {
+                    text = "分包全流程演示"
+                    setOnClickListener {
+                        startActivity(Intent(requireContext(), PipelineDemoActivity::class.java))
+                    }
+                }
+                val debugButton = Button(requireContext()).apply {
+                    text = "RN 调试入口"
+                    setOnClickListener {
+                        startActivity(Intent(requireContext(), RNDebugEntryActivity::class.java))
+                    }
+                }
+                addView(pipelineButton, LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+                addView(debugButton, LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+            }
             applySystemBarInsets(extraTopDp = 4)
         }
     }
