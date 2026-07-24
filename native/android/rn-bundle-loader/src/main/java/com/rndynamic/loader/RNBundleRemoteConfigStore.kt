@@ -1,22 +1,30 @@
 package com.rndynamic.loader
 
+import android.content.Context
 import org.json.JSONObject
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 
 /**
- * 远程配置加载：从配置中心 HTTP 拉取 bundles JSON，并缓存到本地
+ * 远程配置加载：从配置中心 HTTP 拉取 bundles JSON，并缓存到本地。
+ *
+ * 更新策略（配合发布台「前置更新远程资源」）：
+ * - 始终先拉小文件 {base}/config/{rnVersion}/{channel}.revision.json（禁 HTTP 缓存）
+ * - revision 与本地记录相同 → 使用磁盘缓存的配置，不重新拉全量 JSON
+ * - revision 不同或本地无记录 → 拉全量配置并替换缓存，再写入新 revision
+ * - CDN 无 revision 文件（旧部署）→ 兜底直接拉配置
  *
  * URL 约定：
- * - {baseUrl}/config/{rnVersion}/{channel}
- * - 或 {baseUrl}/config/v1/bundles?rnVersion=&channel=
+ * - {baseUrl}/config/{rnVersion}/{channel}.json
+ * - 或 {baseUrl}/config/{rnVersion}/{channel}
  */
 class RNBundleRemoteConfigStore(
     private val configBaseUrl: String,
     val rnVersion: String,
     channelInput: String = "main",
     private val cacheDir: File,
+    private val appContext: Context? = null,
 ) {
     val channel: String = RNBundleConfigStore.normalizeChannel(channelInput)
 
@@ -29,14 +37,43 @@ class RNBundleRemoteConfigStore(
             "$channel.json",
         )
 
+    private val revisionPrefsKey: String
+        get() = "rev_${rnVersion}_$channel"
+
+    /**
+     * @param forceReload true 时忽略 revision，强制拉全量（调试用）
+     */
     fun load(forceReload: Boolean = false): RNBundlesConfigFile {
         if (!forceReload) {
             cached?.let { return it }
         }
 
+        if (!forceReload) {
+            val remoteRevision = fetchRemoteRevisionOrNull()
+            val localRevision = readLocalRevision()
+            if (remoteRevision != null &&
+                localRevision != null &&
+                remoteRevision == localRevision &&
+                cacheFile.exists()
+            ) {
+                val fromDisk = parseConfigFile(cacheFile.readText(Charsets.UTF_8))
+                cached = fromDisk
+                return fromDisk
+            }
+            // remoteRevision == null：旧 CDN 无标记，继续拉配置（兼容）
+            val remote = fetchRemoteConfig()
+            cached = remote
+            writeCache(remote)
+            if (remoteRevision != null) {
+                writeLocalRevision(remoteRevision)
+            }
+            return remote
+        }
+
         val remote = fetchRemoteConfig()
         cached = remote
         writeCache(remote)
+        fetchRemoteRevisionOrNull()?.let { writeLocalRevision(it) }
         return remote
     }
 
@@ -46,6 +83,60 @@ class RNBundleRemoteConfigStore(
             ?: throw RNBundleConfigException("未找到分包 key: $key")
         return list.firstOrNull { it.platform == platform }
             ?: throw RNBundleConfigException("分包 $key 缺少当前平台配置")
+    }
+
+    /**
+     * 探测远程 revision；失败或不存在返回 null（调用方走兼容路径）
+     */
+    private fun fetchRemoteRevisionOrNull(): String? {
+        val base = configBaseUrl.trimEnd('/')
+        val urlString = "$base/config/$rnVersion/$channel.revision.json"
+        return try {
+            val connection = (URL(urlString).openConnection() as HttpURLConnection).apply {
+                connectTimeout = 8_000
+                readTimeout = 8_000
+                requestMethod = "GET"
+                useCaches = false
+                setRequestProperty("Cache-Control", "no-cache")
+                setRequestProperty("Pragma", "no-cache")
+                setRequestProperty("Accept", "application/json")
+                setRequestProperty("User-Agent", "RnDynamicBundle/0.86")
+            }
+            try {
+                val code = connection.responseCode
+                if (code !in 200..299) return null
+                val body = connection.inputStream.bufferedReader().use { it.readText() }
+                val root = JSONObject(body)
+                root.optString("revision", "").takeIf { it.isNotBlank() }
+            } finally {
+                connection.disconnect()
+            }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun readLocalRevision(): String? {
+        val ctx = appContext ?: return null
+        return try {
+            ctx.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .getString(revisionPrefsKey, null)
+                ?.takeIf { it.isNotBlank() }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun writeLocalRevision(revision: String) {
+        val ctx = appContext ?: return
+        try {
+            ctx.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .edit()
+                .putString(revisionPrefsKey, revision)
+                .apply()
+        } catch (_: Exception) {
+            // revision 落盘失败不阻断主流程
+        }
     }
 
     private fun fetchRemoteConfig(): RNBundlesConfigFile {
@@ -117,6 +208,8 @@ class RNBundleRemoteConfigStore(
     }
 
     companion object {
+        private const val PREFS_NAME = "rn_remote_config_revision"
+
         fun parseConfigJson(text: String): RNBundlesConfigFile = parseConfigFile(text)
 
         private fun parseConfigFile(text: String): RNBundlesConfigFile {

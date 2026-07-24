@@ -53,8 +53,10 @@ object RNBundleResolver {
                     rnVersion = remoteSettings.rnVersion,
                     channelInput = channel,
                     cacheDir = cacheDir,
+                    appContext = context.applicationContext,
                 )
-                val remoteConfig = remoteStore.load(forceReload = true)
+                // 按 CDN revision 决定：有变更才拉全量配置，否则走本地缓存
+                val remoteConfig = remoteStore.load(forceReload = false)
                 remoteConfig.bundles[bundleKey]
                     ?.firstOrNull { it.platform == platform }
                     ?.let { remotePage ->
