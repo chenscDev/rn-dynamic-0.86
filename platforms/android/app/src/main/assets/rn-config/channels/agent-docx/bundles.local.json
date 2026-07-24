@@ -2,15 +2,15 @@
   "rnVersion": "0.86.0",
   "baseVersion": "0.1.0",
   "channel": "agent-docx",
-  "updatedAt": "2026-07-23T05:00:59.000Z",
+  "updatedAt": "2026-07-24T04:33:23.000Z",
   "bundles": {
     "common": [
       {
         "key": "common",
         "name": "common",
         "componentName": "common",
-        "url": "http://47.93.207.70/cdn/rn/0.86.0/agent-docx/common/android/common.android.98bf41643377.bundle",
-        "assetsUrl": "http://47.93.207.70/cdn/rn/0.86.0/agent-docx/common/android/assets",
+        "url": "embedded://rn-bundles/agent-docx/common/common.android.98bf41643377.bundle",
+        "assetsUrl": "rn-bundles/agent-docx/common/common.android.98bf41643377.bundle",
         "hash": "98bf41643377",
         "platform": "android",
         "kind": "common"
@@ -114,21 +114,6 @@
         "url": "embedded://rn-bundles/agent-docx/message/message.android.a18b5c778fb7.bundle",
         "assetsUrl": "rn-bundles/agent-docx/message/message.android.a18b5c778fb7.bundle",
         "hash": "a18b5c778fb7",
-        "platform": "android",
-        "kind": "page",
-        "dependsOn": [
-          "common"
-        ]
-      }
-    ],
-    "docs-agent": [
-      {
-        "key": "docs-agent",
-        "name": "文档问答",
-        "componentName": "docs-agent",
-        "url": "http://47.93.207.70/cdn/rn/0.86.0/agent-docx/docs-agent/android/docs-agent.android.bda15559a620.bundle",
-        "assetsUrl": "http://47.93.207.70/cdn/rn/0.86.0/agent-docx/docs-agent/android/assets",
-        "hash": "bda15559a620",
         "platform": "android",
         "kind": "page",
         "dependsOn": [
