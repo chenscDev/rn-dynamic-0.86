@@ -30,12 +30,8 @@ class RNBundleCache(private val cacheDirectory: File) {
         assetsFallbackItem: RNBundleItem? = null,
     ): File {
         val platform = item.platform.ifBlank { "android" }
+        // 仅命中「当前 hash」才直接用；禁止用旧 hash/assets 缓存抢先返回，否则热更永远下不到新包
         findCachedFile(item.key, item.hash, platform)?.let { return it }
-        assetsFallbackItem?.hash?.let { fallbackHash ->
-            if (fallbackHash != item.hash) {
-                findCachedFile(item.key, fallbackHash, platform)?.let { return it }
-            }
-        }
 
         val keyDir = File(cacheDirectory, item.key)
         if (!keyDir.exists() && !keyDir.mkdirs()) {
