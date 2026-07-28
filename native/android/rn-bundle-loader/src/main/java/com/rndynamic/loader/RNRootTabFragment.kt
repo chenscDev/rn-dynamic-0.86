@@ -74,10 +74,7 @@ class RNRootTabFragment : Fragment() {
                 val report = session.finish(act.applicationContext)
                 RNLoadPerfHolder.lastReport = report
                 RNBundleLoadTrace.clear()
-                act.runOnUiThread {
-                    if (!isAdded) return@runOnUiThread
-                    RNLoadPerfPanel.attach(act, mountArea, report, initiallyExpanded = true)
-                }
+                // 加载明细改由 RN PageShell 顶部可展开条展示，避免底部浮层重复
             } catch (error: Exception) {
                 RNBundleLoadTrace.clear()
                 Log.e(TAG, "RN Tab 挂载失败", error)

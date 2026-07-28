@@ -173,7 +173,7 @@ class RNContainerActivity : AppCompatActivity(), DefaultHardwareBackBtnHandler {
                     if (!isFinishing && !isDestroyed) {
                         loadingDetail.text = report.toReadableText()
                         loadingView.visibility = View.GONE
-                        RNLoadPerfPanel.attach(this, rnContainer, report, initiallyExpanded = true)
+                        // 加载明细改由 RN PageShell 顶部可展开条展示，避免底部浮层重复
                         RNBundleMount.forwardOnHostResume(this)
                     }
                 }
