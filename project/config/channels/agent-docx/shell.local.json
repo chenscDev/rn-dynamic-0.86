@@ -1,25 +1,25 @@
 {
   "rnVersion": "0.86.0",
   "channel": "agent-docx",
-  "updatedAt": "2026-07-24T08:53:38.347Z",
+  "updatedAt": "2026-07-28T04:20:00.000Z",
   "tabs": [
     {
       "id": "home",
       "title": "首页",
-      "type": "native",
+      "type": "rn-root",
+      "bundleKey": "home",
       "icon": "ic_tab_home",
       "visible": true,
-      "order": 0,
-      "nativeKey": "home"
+      "order": 0
     },
     {
       "id": "chat",
       "title": "问答",
       "type": "rn-root",
+      "bundleKey": "docs-agent",
       "icon": "ic_tab_chat",
       "visible": true,
-      "order": 1,
-      "bundleKey": "docs-agent"
+      "order": 1
     },
     {
       "id": "biz",
@@ -30,22 +30,39 @@
       "order": 2,
       "entries": [
         {
-          "key": "home",
-          "title": "home",
+          "key": "order",
+          "title": "订单",
+          "icon": "ic_entry_order",
           "visible": true,
           "order": 0
         },
         {
-          "key": "order",
-          "title": "order",
+          "key": "demo",
+          "title": "Demo",
+          "icon": "ic_entry_home",
           "visible": true,
           "order": 1
         },
         {
           "key": "profile",
-          "title": "profile",
+          "title": "我的资料",
+          "icon": "ic_tab_mine",
           "visible": true,
           "order": 2
+        },
+        {
+          "key": "wallet",
+          "title": "钱包",
+          "icon": "ic_entry_order",
+          "visible": true,
+          "order": 3
+        },
+        {
+          "key": "message",
+          "title": "消息",
+          "icon": "ic_entry_home",
+          "visible": true,
+          "order": 4
         }
       ]
     },
@@ -53,10 +70,10 @@
       "id": "mine",
       "title": "我的",
       "type": "native",
+      "nativeKey": "mine",
       "icon": "ic_tab_mine",
       "visible": true,
-      "order": 99,
-      "nativeKey": "mine"
+      "order": 99
     }
   ]
 }

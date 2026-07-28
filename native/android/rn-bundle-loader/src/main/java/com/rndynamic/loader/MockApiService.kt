@@ -16,8 +16,8 @@ object MockApiService {
 
     data class ApiException(val code: Int, override val message: String) : Exception(message)
 
+    // 业务 Tab 仅放 demo 分包；AI 短视频在首页 rn-root=home
     private val allEntries = listOf(
-        entry("home", "Home", "ic_entry_home"),
         entry("order", "订单", "ic_entry_order"),
         entry("demo", "Demo", "ic_entry_home"),
         entry("profile", "我的资料", "ic_tab_mine"),
@@ -50,8 +50,8 @@ object MockApiService {
                 JSONObject()
                     .put("id", "home")
                     .put("title", "首页")
-                    .put("type", "native")
-                    .put("nativeKey", "home")
+                    .put("type", "rn-root")
+                    .put("bundleKey", "home")
                     .put("icon", "ic_tab_home")
                     .put("visible", true)
                     .put("order", 0),
