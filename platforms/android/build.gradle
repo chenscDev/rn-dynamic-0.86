@@ -24,3 +24,26 @@ buildscript {
 }
 
 apply plugin: "com.facebook.react.rootproject"
+
+// 子工程（如 react-native-webview）自带 buildscript 常只写 google()/mavenCentral，
+// 国内网络易 TLS 失败；统一补齐阿里云镜像。
+subprojects { sub ->
+    sub.buildscript {
+        repositories {
+            maven { url 'https://maven.aliyun.com/repository/google' }
+            maven { url 'https://maven.aliyun.com/repository/public' }
+            maven { url 'https://maven.aliyun.com/repository/gradle-plugin' }
+            maven { url 'https://maven.aliyun.com/repository/central' }
+            google()
+            mavenCentral()
+            gradlePluginPortal()
+        }
+    }
+    sub.repositories {
+        maven { url 'https://maven.aliyun.com/repository/google' }
+        maven { url 'https://maven.aliyun.com/repository/public' }
+        maven { url 'https://maven.aliyun.com/repository/central' }
+        google()
+        mavenCentral()
+    }
+}
