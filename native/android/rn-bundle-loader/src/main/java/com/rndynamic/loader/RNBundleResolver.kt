@@ -6,6 +6,8 @@ import java.io.InputStream
 
 /**
  * 分包加载：远程配置优先，APK assets 内置兜底（支持无感热更）
+ *
+ * CDN-only 分包（未打入 APK）允许仅存在于远程配置中。
  */
 object RNBundleResolver {
     data class ResolvedBundles(
@@ -18,8 +20,8 @@ object RNBundleResolver {
 
     /**
      * 解析 page + common 分包路径
-     * 1. 读取 assets 内置配置作为兜底
-     * 2. 尝试拉远程 bundles 配置并合并（远程 url/hash 优先，保留 assetsUrl）
+     * 1. 读取 assets 内置配置作为兜底（可缺页）
+     * 2. 尝试拉远程 bundles 配置并合并（远程 url/hash 优先）
      * 3. 分包文件：CDN/HTTP 优先，失败则读 APK assets
      */
     @Throws(RNBundleCacheException::class, RNBundleConfigException::class)
@@ -38,16 +40,21 @@ object RNBundleResolver {
             forceFromAssets = false,
         )
         val assetsStore = RNBundleConfigStore(assetsConfigFile, channel)
-        val assetsPage = assetsStore.item(bundleKey, platform = platform)
-        val assetsCommon = runCatching {
-            assetsStore.item("common", platform = platform)
-        }.getOrNull()
-        trace?.end(detail = assetsConfigFile.name)
+        // 业务入口可能仅 CDN 下发，APK 内不必有该 key
+        val assetsPage = assetsStore.findItem(bundleKey, platform = platform)
+        val assetsCommon = assetsStore.findItem("common", platform = platform)
+        trace?.end(
+            detail = if (assetsPage != null) {
+                "内置含 $bundleKey"
+            } else {
+                "内置无 $bundleKey（将走远程）"
+            },
+        )
 
         val remoteSettings = RNBundleRemoteSettingsStore.load(context, channel)
         var usedRemote = false
-        var pageItem = assetsPage
-        var commonItem = assetsCommon
+        var pageItem: RNBundleItem? = assetsPage
+        var commonItem: RNBundleItem? = assetsCommon
 
         if (remoteSettings.isUsable()) {
             try {
@@ -59,7 +66,6 @@ object RNBundleResolver {
                     cacheDir = cacheDir,
                     appContext = context.applicationContext,
                 )
-                // 按 CDN revision 决定：有变更才拉全量配置，否则走本地缓存
                 val remoteConfig = remoteStore.load(forceReload = false)
                 remoteConfig.bundles[bundleKey]
                     ?.firstOrNull { it.platform == platform }
@@ -70,25 +76,30 @@ object RNBundleResolver {
                 remoteConfig.bundles["common"]
                     ?.firstOrNull { it.platform == platform }
                     ?.let { remoteCommon ->
-                        commonItem = mergeItem(remoteCommon, assetsCommon ?: remoteCommon)
+                        commonItem = mergeItem(remoteCommon, assetsCommon)
                         usedRemote = true
                     }
                 trace?.end(detail = if (usedRemote) "已合并远程 url/hash" else "远程无对应项")
                 trace?.usedRemote = usedRemote
-            } catch (_: Exception) {
-                trace?.end(detail = "远程失败，回退本地")
-                // 远程不可用，继续使用 assets 配置
+            } catch (error: Exception) {
+                trace?.end(detail = "远程失败: ${error.message}")
             }
         } else {
             trace?.note("config:remote", "未启用远程", 0L)
         }
+
+        val resolvedPage = pageItem
+            ?: throw RNBundleConfigException(
+                "未找到分包 key: $bundleKey（APK 未内置且远程配置也没有；请发布该分包到 CDN 或嵌入 APK）",
+            )
+        val resolvedCommon = commonItem
 
         val cache = RNBundleCache(cacheDir)
         val assetOpener: (String) -> InputStream = { path ->
             context.assets.open(path)
         }
 
-        val commonFile = commonItem?.let { item ->
+        val commonFile = resolvedCommon?.let { item ->
             cache.resolveBundleFile(
                 item = item,
                 assetOpener = assetOpener,
@@ -97,7 +108,7 @@ object RNBundleResolver {
             )
         }
         val pageFile = cache.resolveBundleFile(
-            item = pageItem,
+            item = resolvedPage,
             assetOpener = assetOpener,
             preferRemote = true,
             assetsFallbackItem = assetsPage,
@@ -106,14 +117,17 @@ object RNBundleResolver {
         return ResolvedBundles(
             pageFile = pageFile,
             commonFile = commonFile,
-            pageItem = pageItem,
-            commonItem = commonItem,
+            pageItem = resolvedPage,
+            commonItem = resolvedCommon,
             usedRemoteConfig = usedRemote,
         )
     }
 
-    /** 远程项优先 url/hash/bytecode；HTTP assetsUrl 用于资源同步，APK 路径由 assetsFallbackItem 兜底 */
-    private fun mergeItem(remote: RNBundleItem, assets: RNBundleItem): RNBundleItem {
+    /** 远程项优先；assets 可为 null（纯 CDN 分包） */
+    private fun mergeItem(remote: RNBundleItem, assets: RNBundleItem?): RNBundleItem {
+        if (assets == null) {
+            return remote
+        }
         val remoteAssets = remote.assetsUrl?.trim().orEmpty()
         val assetsAssets = assets.assetsUrl?.trim().orEmpty()
         val mergedAssetsUrl = when {

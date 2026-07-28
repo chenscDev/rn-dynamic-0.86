@@ -77,11 +77,15 @@ class RNBundleConfigStore(
     }
 
     fun item(key: String, platform: String = "android"): RNBundleItem {
-        val config = load()
-        val list = config.bundles[key]
+        return findItem(key, platform)
             ?: throw RNBundleConfigException("未找到分包 key: $key")
+    }
+
+    /** 可选查找：CDN-only 分包可不在 APK 内置配置中 */
+    fun findItem(key: String, platform: String = "android"): RNBundleItem? {
+        val config = load()
+        val list = config.bundles[key] ?: return null
         return list.firstOrNull { it.platform == platform }
-            ?: throw RNBundleConfigException("分包 $key 缺少当前平台配置")
     }
 
     companion object {
