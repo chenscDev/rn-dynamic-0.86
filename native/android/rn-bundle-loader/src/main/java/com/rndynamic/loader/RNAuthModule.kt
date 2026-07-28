@@ -11,7 +11,11 @@ import com.facebook.react.uimanager.ViewManager
 
 class RNHostPackage : ReactPackage {
     override fun createNativeModules(reactContext: ReactApplicationContext): List<NativeModule> {
-        return listOf(RNAuthModule(reactContext), RNNavigationModule(reactContext))
+        return listOf(
+            RNAuthModule(reactContext),
+            RNNavigationModule(reactContext),
+            RNLoadPerfModule(reactContext),
+        )
     }
 
     override fun createViewManagers(

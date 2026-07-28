@@ -152,24 +152,33 @@ class RNContainerActivity : AppCompatActivity(), DefaultHardwareBackBtnHandler {
         )
 
         thread(name = "RNContainerMount") {
+            val channel = intent.getStringExtra(EXTRA_CHANNEL).orEmpty()
+                .ifBlank { RNAssetBundleHelper.readBuildChannel(this) }
+            val bundleKey = intent.getStringExtra(EXTRA_BUNDLE_KEY)
+                ?: intent.getStringExtra(EXTRA_MODULE_NAME)
+                ?: "unknown"
+            val session = RNBundleLoadTrace.beginSession(bundleKey, channel)
             try {
                 updateLoading("解析分包配置…", "channel / bundleKey / assets / cache")
                 val request = buildMountRequest()
                 if (isActivityDestroyed) return@thread
                 showResolvedPaths(request)
                 updateLoading("挂载 ReactHost…", loadingDetail.text?.toString().orEmpty())
-                val startedAt = System.currentTimeMillis()
                 RNBundleMount.mount(this, rnContainer, request)
                 if (isActivityDestroyed) return@thread
-                val costMs = System.currentTimeMillis() - startedAt
+                val report = session.finish(applicationContext)
+                RNLoadPerfHolder.lastReport = report
+                RNBundleLoadTrace.clear()
                 runOnUiThread {
                     if (!isFinishing && !isDestroyed) {
-                        loadingDetail.append("\n\n挂载完成 · ${costMs}ms")
+                        loadingDetail.text = report.toReadableText()
                         loadingView.visibility = View.GONE
+                        RNLoadPerfPanel.attach(this, rnContainer, report, initiallyExpanded = true)
                         RNBundleMount.forwardOnHostResume(this)
                     }
                 }
             } catch (error: Exception) {
+                RNBundleLoadTrace.clear()
                 if (isActivityDestroyed) return@thread
                 runOnUiThread {
                     if (isFinishing || isDestroyed) return@runOnUiThread

@@ -190,6 +190,7 @@ object RNBundleMount {
         if (pageLocal != pageLocalJs) {
             Log.i("RNBundleMount", "单包优先加载 Hermes bytecode: $pageLocal")
         }
+        RNBundleLoadTrace.current()?.begin("mount:ReactHost", request.moduleName)
         val reactHost = createReactHost(
             activity = activity,
             bundlePath = pageLocal,
@@ -197,7 +198,9 @@ object RNBundleMount {
             useDevSupport = metroLive,
             jsMainModulePath = jsMainModulePath,
         )
-        return attachSurface(activity, container, reactHost, request.moduleName, request.initialProps)
+        val surface = attachSurface(activity, container, reactHost, request.moduleName, request.initialProps)
+        RNBundleLoadTrace.current()?.end(detail = if (metroLive) "metro" else "file")
+        return surface
     }
 
     private fun mountDual(activity: Activity, container: ViewGroup, request: Request): View {
@@ -209,24 +212,36 @@ object RNBundleMount {
         // Bridgeless 下二次 loadJSBundle 完整 Metro page 包时，page 入口常因依赖解析失败
         // 导致 registerPage 未执行（表现为 "xxx has not been registered"）。
         // 可靠做法：把 common 模块定义 + page 模块定义拼成单一脚本一次加载。
-        val combined = combineCommonAndPageBundle(
+        RNBundleLoadTrace.current()?.begin(
+            "merge:common+page",
+            "module=${request.moduleName}",
+        )
+        val (combined, mergeCacheHit) = combineCommonAndPageBundle(
             activity = activity,
             moduleName = request.moduleName,
             commonPath = commonLocal,
             pagePath = pageLocal,
         )
+        RNBundleLoadTrace.current()?.end(
+            detail = if (mergeCacheHit) "cache hit ${combined.name}" else combined.name,
+            cacheHit = mergeCacheHit,
+            bytes = combined.length(),
+        )
         Log.i(
             "RNBundleMount",
-            "mountDual combined module=${request.moduleName} file=${combined.absolutePath} size=${combined.length()}",
+            "mountDual combined module=${request.moduleName} file=${combined.absolutePath} size=${combined.length()} cache=$mergeCacheHit",
         )
 
+        RNBundleLoadTrace.current()?.begin("mount:ReactHost", request.moduleName)
         val reactHost = createReactHost(
             activity = activity,
             bundlePath = combined.absolutePath,
             sourceUrl = null,
             useDevSupport = false,
         )
-        return attachSurface(activity, container, reactHost, request.moduleName, request.initialProps)
+        val surface = attachSurface(activity, container, reactHost, request.moduleName, request.initialProps)
+        RNBundleLoadTrace.current()?.end(detail = "surface attached")
+        return surface
     }
 
     /**
@@ -240,7 +255,7 @@ object RNBundleMount {
         moduleName: String,
         commonPath: String,
         pagePath: String,
-    ): File {
+    ): Pair<File, Boolean> {
         val commonFile = File(commonPath)
         val pageFile = File(pagePath)
         if (!commonFile.exists() || commonFile.length() <= 0L) {
@@ -259,7 +274,7 @@ object RNBundleMount {
         val outFile = File(outDir, "${moduleName}.${commonHash}_${pageHash}.combined.bundle")
         if (outFile.exists() && outFile.length() > 0L) {
             Log.i("RNBundleMount", "combined cache hit ${outFile.name} size=${outFile.length()}")
-            return outFile
+            return outFile to true
         }
 
         // 流式写入：先写 common，再扫描 page 定位首个 __d( 后追加，避免双份全文 String
@@ -305,7 +320,7 @@ object RNBundleMount {
                     it.name != outFile.name
             }
             ?.forEach { it.delete() }
-        return outFile
+        return outFile to false
     }
 
     private fun hashHintFromPath(path: String): String {

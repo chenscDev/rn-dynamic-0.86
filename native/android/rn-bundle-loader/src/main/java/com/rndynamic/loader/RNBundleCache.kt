@@ -32,6 +32,13 @@ class RNBundleCache(private val cacheDirectory: File) {
         val platform = item.platform.ifBlank { "android" }
         // 仅命中「当前 hash」才直接用；禁止用旧 hash/assets 缓存抢先返回，否则热更永远下不到新包
         findCachedFile(item.key, item.hash, platform)?.let { cached ->
+            RNBundleLoadTrace.current()?.note(
+                name = "cache:${item.key}",
+                detail = cached.name,
+                durationMs = 0L,
+                cacheHit = true,
+                bytes = cached.length(),
+            )
             syncRemoteAssetsIfNeeded(item, cached)
             syncBytecodeIfNeeded(item, cached)
             return cached
@@ -48,16 +55,20 @@ class RNBundleCache(private val cacheDirectory: File) {
         }
 
         val errors = mutableListOf<String>()
+        val session = RNBundleLoadTrace.current()
 
         if (preferRemote && isRemoteUrl(item.url)) {
             val target = localFile(item.key, item.hash, platform)
             try {
+                session?.begin("download:${item.key}", item.url)
                 copyFromUrl(item.url, target)
                 verifyHash(target, item.hash)
+                session?.end(detail = target.name, cacheHit = false, bytes = target.length())
                 syncRemoteAssetsIfNeeded(item, target)
                 syncBytecodeIfNeeded(item, target)
                 return target
             } catch (error: Exception) {
+                session?.end(detail = "失败: ${error.message}", cacheHit = false)
                 errors.add("remote(${item.url}): ${error.message}")
                 if (target.exists()) {
                     target.delete()

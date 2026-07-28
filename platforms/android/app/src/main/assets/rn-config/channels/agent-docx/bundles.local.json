@@ -2,16 +2,16 @@
   "rnVersion": "0.86.0",
   "baseVersion": "0.1.0",
   "channel": "agent-docx",
-  "updatedAt": "2026-07-24T10:25:25.000Z",
+  "updatedAt": "2026-07-28T02:46:34.000Z",
   "bundles": {
     "common": [
       {
         "key": "common",
         "name": "common",
         "componentName": "common",
-        "url": "embedded://rn-bundles/agent-docx/common/common.android.98bf41643377.bundle",
-        "assetsUrl": "rn-bundles/agent-docx/common/common.android.98bf41643377.bundle",
-        "hash": "98bf41643377",
+        "url": "embedded://rn-bundles/agent-docx/common/common.android.77b591515d15.bundle",
+        "assetsUrl": "rn-bundles/agent-docx/common/common.android.77b591515d15.bundle",
+        "hash": "77b591515d15",
         "platform": "android",
         "kind": "common"
       }
@@ -31,104 +31,14 @@
         ]
       }
     ],
-    "home": [
-      {
-        "key": "home",
-        "name": "Home",
-        "componentName": "home",
-        "url": "embedded://rn-bundles/agent-docx/home/home.android.fb101002e1cf.bundle",
-        "assetsUrl": "rn-bundles/agent-docx/home/home.android.fb101002e1cf.bundle",
-        "hash": "fb101002e1cf",
-        "platform": "android",
-        "kind": "page",
-        "dependsOn": [
-          "common"
-        ]
-      }
-    ],
-    "order": [
-      {
-        "key": "order",
-        "name": "订单",
-        "componentName": "order",
-        "url": "embedded://rn-bundles/agent-docx/order/order.android.9a3e66f82f67.bundle",
-        "assetsUrl": "rn-bundles/agent-docx/order/order.android.9a3e66f82f67.bundle",
-        "hash": "9a3e66f82f67",
-        "platform": "android",
-        "kind": "page",
-        "dependsOn": [
-          "common"
-        ]
-      }
-    ],
-    "demo": [
-      {
-        "key": "demo",
-        "name": "Demo",
-        "componentName": "demo",
-        "url": "embedded://rn-bundles/agent-docx/demo/demo.android.ea4df5504dc7.bundle",
-        "assetsUrl": "rn-bundles/agent-docx/demo/demo.android.ea4df5504dc7.bundle",
-        "hash": "ea4df5504dc7",
-        "platform": "android",
-        "kind": "page",
-        "dependsOn": [
-          "common"
-        ]
-      }
-    ],
-    "profile": [
-      {
-        "key": "profile",
-        "name": "我的资料",
-        "componentName": "profile",
-        "url": "embedded://rn-bundles/agent-docx/profile/profile.android.aaebaf129730.bundle",
-        "assetsUrl": "rn-bundles/agent-docx/profile/profile.android.aaebaf129730.bundle",
-        "hash": "aaebaf129730",
-        "platform": "android",
-        "kind": "page",
-        "dependsOn": [
-          "common"
-        ]
-      }
-    ],
-    "wallet": [
-      {
-        "key": "wallet",
-        "name": "钱包",
-        "componentName": "wallet",
-        "url": "embedded://rn-bundles/agent-docx/wallet/wallet.android.c35d3f6fbdeb.bundle",
-        "assetsUrl": "rn-bundles/agent-docx/wallet/wallet.android.c35d3f6fbdeb.bundle",
-        "hash": "c35d3f6fbdeb",
-        "platform": "android",
-        "kind": "page",
-        "dependsOn": [
-          "common"
-        ]
-      }
-    ],
-    "message": [
-      {
-        "key": "message",
-        "name": "消息",
-        "componentName": "message",
-        "url": "embedded://rn-bundles/agent-docx/message/message.android.a18b5c778fb7.bundle",
-        "assetsUrl": "rn-bundles/agent-docx/message/message.android.a18b5c778fb7.bundle",
-        "hash": "a18b5c778fb7",
-        "platform": "android",
-        "kind": "page",
-        "dependsOn": [
-          "common"
-        ]
-      }
-    ],
     "docs-agent": [
       {
         "key": "docs-agent",
         "name": "docs-agent",
         "componentName": "docs-agent",
-        "url": "http://47.93.207.70/cdn/rn/0.86.0/agent-docx/docs-agent/android/docs-agent.android.9f41fdbfc7f6.bundle",
+        "url": "http://47.93.207.70/cdn/rn/0.86.0/agent-docx/docs-agent/android/docs-agent.android.1ab9e67f79c1.bundle",
         "assetsUrl": "http://47.93.207.70/cdn/rn/0.86.0/agent-docx/docs-agent/android/assets",
-        "hash": "9f41fdbfc7f6",
+        "hash": "1ab9e67f79c1",
         "platform": "android",
         "channel": "agent-docx",
         "kind": "page",

@@ -30,6 +30,8 @@ object RNBundleResolver {
         cacheDir: File,
         platform: String = "android",
     ): ResolvedBundles {
+        val trace = RNBundleLoadTrace.current()
+        trace?.begin("config:assets", "读取 APK / 本地配置")
         val assetsConfigFile = RNAssetBundleHelper.ensureChannelConfig(
             context = context,
             channel = channel,
@@ -40,6 +42,7 @@ object RNBundleResolver {
         val assetsCommon = runCatching {
             assetsStore.item("common", platform = platform)
         }.getOrNull()
+        trace?.end(detail = assetsConfigFile.name)
 
         val remoteSettings = RNBundleRemoteSettingsStore.load(context, channel)
         var usedRemote = false
@@ -48,6 +51,7 @@ object RNBundleResolver {
 
         if (remoteSettings.isUsable()) {
             try {
+                trace?.begin("config:remote", remoteSettings.baseUrl)
                 val remoteStore = RNBundleRemoteConfigStore(
                     configBaseUrl = remoteSettings.baseUrl,
                     rnVersion = remoteSettings.rnVersion,
@@ -69,9 +73,14 @@ object RNBundleResolver {
                         commonItem = mergeItem(remoteCommon, assetsCommon ?: remoteCommon)
                         usedRemote = true
                     }
+                trace?.end(detail = if (usedRemote) "已合并远程 url/hash" else "远程无对应项")
+                trace?.usedRemote = usedRemote
             } catch (_: Exception) {
+                trace?.end(detail = "远程失败，回退本地")
                 // 远程不可用，继续使用 assets 配置
             }
+        } else {
+            trace?.note("config:remote", "未启用远程", 0L)
         }
 
         val cache = RNBundleCache(cacheDir)

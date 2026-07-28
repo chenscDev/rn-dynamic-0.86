@@ -12,7 +12,6 @@ import android.widget.Button
 import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.LinearLayout
-import android.widget.ProgressBar
 import android.widget.TextView
 import androidx.fragment.app.Fragment
 import java.io.File
@@ -45,19 +44,42 @@ class RNRootTabFragment : Fragment() {
 
     private fun startMount() {
         mountArea.removeAllViews()
-        mountArea.addView(ProgressBar(requireContext()))
+        val loading = TextView(requireContext()).apply {
+            text = "加载中：解析配置 → 下载/缓存 → 合并 → 挂载…"
+            textSize = 13f
+            gravity = Gravity.CENTER
+            setPadding(32, 32, 32, 32)
+        }
+        mountArea.addView(loading)
 
         thread(name = "RNRootTabMount") {
+            val channelName = channel.ifBlank {
+                RNAssetBundleHelper.readBuildChannel(requireContext())
+            }
+            val session = RNBundleLoadTrace.beginSession(bundleKey, channelName)
             try {
-                val request = buildRequest(bundleKey, channel, configPath)
                 activity?.runOnUiThread {
-                    if (!isAdded) return@runOnUiThread
-                    mountArea.removeAllViews()
+                    if (isAdded) loading.text = "① 解析配置 / 拉取分包…"
                 }
-                activity?.let {
-                    RNBundleMount.mount(it, mountArea, request)
+                val request = buildRequest(bundleKey, channelName, configPath)
+                if (!isAdded) return@thread
+                val act = activity ?: return@thread
+                val uiReady = java.util.concurrent.CountDownLatch(1)
+                act.runOnUiThread {
+                    if (isAdded) mountArea.removeAllViews()
+                    uiReady.countDown()
+                }
+                uiReady.await()
+                RNBundleMount.mount(act, mountArea, request)
+                val report = session.finish(act.applicationContext)
+                RNLoadPerfHolder.lastReport = report
+                RNBundleLoadTrace.clear()
+                act.runOnUiThread {
+                    if (!isAdded) return@runOnUiThread
+                    RNLoadPerfPanel.attach(act, mountArea, report, initiallyExpanded = true)
                 }
             } catch (error: Exception) {
+                RNBundleLoadTrace.clear()
                 Log.e(TAG, "RN Tab 挂载失败", error)
                 activity?.runOnUiThread {
                     if (!isAdded) return@runOnUiThread
