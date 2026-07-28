@@ -2,16 +2,16 @@
   "rnVersion": "0.86.0",
   "baseVersion": "0.1.0",
   "channel": "agent-docx",
-  "updatedAt": "2026-07-28T02:46:34.000Z",
+  "updatedAt": "2026-07-28T03:25:44.000Z",
   "bundles": {
     "common": [
       {
         "key": "common",
         "name": "common",
         "componentName": "common",
-        "url": "embedded://rn-bundles/agent-docx/common/common.android.77b591515d15.bundle",
-        "assetsUrl": "rn-bundles/agent-docx/common/common.android.77b591515d15.bundle",
-        "hash": "77b591515d15",
+        "url": "embedded://rn-bundles/agent-docx/common/common.android.9dfde529994e.bundle",
+        "assetsUrl": "rn-bundles/agent-docx/common/common.android.9dfde529994e.bundle",
+        "hash": "9dfde529994e",
         "platform": "android",
         "kind": "common"
       }
@@ -24,6 +24,36 @@
         "url": "embedded://rn-bundles/agent-docx/login/login.android.22067ae391a3.bundle",
         "assetsUrl": "rn-bundles/agent-docx/login/login.android.22067ae391a3.bundle",
         "hash": "22067ae391a3",
+        "platform": "android",
+        "kind": "page",
+        "dependsOn": [
+          "common"
+        ]
+      }
+    ],
+    "home": [
+      {
+        "key": "home",
+        "name": "Home",
+        "componentName": "home",
+        "url": "embedded://rn-bundles/agent-docx/home/home.android.fb101002e1cf.bundle",
+        "assetsUrl": "rn-bundles/agent-docx/home/home.android.fb101002e1cf.bundle",
+        "hash": "fb101002e1cf",
+        "platform": "android",
+        "kind": "page",
+        "dependsOn": [
+          "common"
+        ]
+      }
+    ],
+    "order": [
+      {
+        "key": "order",
+        "name": "订单",
+        "componentName": "order",
+        "url": "embedded://rn-bundles/agent-docx/order/order.android.9a3e66f82f67.bundle",
+        "assetsUrl": "rn-bundles/agent-docx/order/order.android.9a3e66f82f67.bundle",
+        "hash": "9a3e66f82f67",
         "platform": "android",
         "kind": "page",
         "dependsOn": [
