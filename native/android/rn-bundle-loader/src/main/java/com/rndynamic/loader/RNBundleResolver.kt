@@ -103,10 +103,19 @@ object RNBundleResolver {
         )
     }
 
-    /** 远程项优先 url/hash，保留 assets 内置路径作降级 */
+    /** 远程项优先 url/hash/bytecode；HTTP assetsUrl 用于资源同步，APK 路径由 assetsFallbackItem 兜底 */
     private fun mergeItem(remote: RNBundleItem, assets: RNBundleItem): RNBundleItem {
+        val remoteAssets = remote.assetsUrl?.trim().orEmpty()
+        val assetsAssets = assets.assetsUrl?.trim().orEmpty()
+        val mergedAssetsUrl = when {
+            remoteAssets.startsWith("http://") || remoteAssets.startsWith("https://") -> remoteAssets
+            assetsAssets.isNotEmpty() -> assetsAssets
+            else -> remoteAssets.ifEmpty { null }
+        }
         return remote.copy(
-            assetsUrl = assets.assetsUrl ?: remote.assetsUrl,
+            assetsUrl = mergedAssetsUrl,
+            bytecodeUrl = remote.bytecodeUrl ?: assets.bytecodeUrl,
+            sizeBytes = remote.sizeBytes ?: assets.sizeBytes,
             name = remote.name ?: assets.name,
             componentName = remote.componentName ?: assets.componentName,
         )

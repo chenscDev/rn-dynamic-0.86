@@ -178,7 +178,18 @@ object RNBundleMount {
         }
 
         // 仍下载一份作 Metro 不可达时的兜底；DevSupport 优先从 packager 拉包
-        val pageLocal = resolveToLocalFile(activity, pageSource)
+        val pageLocalJs = resolveToLocalFile(activity, pageSource)
+        val pageLocal = if (!metroLive) {
+            RNBundleCache(File(activity.cacheDir, "RNDynamicBundles"))
+                .resolveBytecodeSibling(File(pageLocalJs))
+                ?.absolutePath
+                ?: pageLocalJs
+        } else {
+            pageLocalJs
+        }
+        if (pageLocal != pageLocalJs) {
+            Log.i("RNBundleMount", "单包优先加载 Hermes bytecode: $pageLocal")
+        }
         val reactHost = createReactHost(
             activity = activity,
             bundlePath = pageLocal,
@@ -220,8 +231,9 @@ object RNBundleMount {
 
     /**
      * 合并 common + page 为单文件：
-     * 1) common 全文（保留其 __d / __r，确保公共模块与标记位就绪）
-     * 2) page 从首个 __d( 起截取（去掉第二份 Metro runtime 前缀，避免冲掉已注册模块）
+     * 1) common 全文（保留其 __d / __r）
+     * 2) page 从首个 __d( 起截取（去掉第二份 Metro runtime）
+     * 同 hash 组合命中磁盘缓存，避免重复读入内存与重写。
      */
     private fun combineCommonAndPageBundle(
         activity: Activity,
@@ -229,40 +241,111 @@ object RNBundleMount {
         commonPath: String,
         pagePath: String,
     ): File {
-        val commonText = File(commonPath).readText(Charsets.UTF_8)
-        val pageText = File(pagePath).readText(Charsets.UTF_8)
-        if (commonText.isBlank()) {
+        val commonFile = File(commonPath)
+        val pageFile = File(pagePath)
+        if (!commonFile.exists() || commonFile.length() <= 0L) {
             throw MountException("common bundle 为空: $commonPath")
         }
-        if (pageText.isBlank()) {
+        if (!pageFile.exists() || pageFile.length() <= 0L) {
             throw MountException("page bundle 为空: $pagePath")
         }
 
-        val pageDefsStart = pageText.indexOf("__d(")
-        if (pageDefsStart < 0) {
-            throw MountException("page bundle 未找到 __d 模块定义: $pagePath")
-        }
-        val pageBody = pageText.substring(pageDefsStart)
-
+        val commonHash = hashHintFromPath(commonPath)
+        val pageHash = hashHintFromPath(pagePath)
         val outDir = File(activity.cacheDir, "RNDynamicBundles/combined")
         if (!outDir.exists() && !outDir.mkdirs()) {
             throw MountException("无法创建合并目录: ${outDir.absolutePath}")
         }
-        val outFile = File(outDir, "$moduleName.combined.bundle")
-        outFile.writeText(
-            buildString(commonText.length + pageBody.length + 64) {
-                append(commonText)
-                if (!commonText.endsWith("\n")) append('\n')
-                append(";\n")
-                append(pageBody)
-                if (!pageBody.endsWith("\n")) append('\n')
-            },
-            Charsets.UTF_8,
-        )
+        val outFile = File(outDir, "${moduleName}.${commonHash}_${pageHash}.combined.bundle")
+        if (outFile.exists() && outFile.length() > 0L) {
+            Log.i("RNBundleMount", "combined cache hit ${outFile.name} size=${outFile.length()}")
+            return outFile
+        }
+
+        // 流式写入：先写 common，再扫描 page 定位首个 __d( 后追加，避免双份全文 String
+        val marker = "__d("
+        val pageDefsStart = indexOfMarkerInFile(pageFile, marker)
+            ?: throw MountException("page bundle 未找到 __d 模块定义: $pagePath")
+
+        FileOutputStream(outFile).use { output ->
+            commonFile.inputStream().use { input -> input.copyTo(output) }
+            if (!endsWithNewline(commonFile)) {
+                output.write('\n'.code)
+            }
+            output.write(";\n".toByteArray(Charsets.UTF_8))
+            pageFile.inputStream().use { input ->
+                var skipped = 0L
+                val buffer = ByteArray(8192)
+                while (skipped < pageDefsStart) {
+                    val toRead = minOf(buffer.size.toLong(), pageDefsStart - skipped).toInt()
+                    val read = input.read(buffer, 0, toRead)
+                    if (read <= 0) break
+                    skipped += read
+                }
+                while (true) {
+                    val read = input.read(buffer)
+                    if (read <= 0) break
+                    output.write(buffer, 0, read)
+                }
+            }
+            if (!endsWithNewline(pageFile)) {
+                output.write('\n'.code)
+            }
+        }
+
         if (outFile.length() <= 0L) {
+            outFile.delete()
             throw MountException("合并 bundle 写入失败: ${outFile.absolutePath}")
         }
+        // 清理同 module 的旧合并文件，控制缓存膨胀
+        outDir.listFiles()
+            ?.filter {
+                it.name.startsWith("$moduleName.") &&
+                    it.name.endsWith(".combined.bundle") &&
+                    it.name != outFile.name
+            }
+            ?.forEach { it.delete() }
         return outFile
+    }
+
+    private fun hashHintFromPath(path: String): String {
+        val name = File(path).name
+        // key.android.<hash>.bundle
+        val parts = name.split('.')
+        return if (parts.size >= 4) parts[parts.size - 2] else RNBundleCache.sha256Prefix(File(path), 8)
+    }
+
+    private fun endsWithNewline(file: File): Boolean {
+        if (file.length() <= 0L) return true
+        java.io.RandomAccessFile(file, "r").use { raf ->
+            raf.seek(file.length() - 1)
+            return raf.read() == '\n'.code
+        }
+    }
+
+    /** 在文件中查找 ASCII marker 的字节偏移（适合 __d( 等 ASCII 标记） */
+    private fun indexOfMarkerInFile(file: File, marker: String): Long? {
+        val needle = marker.toByteArray(Charsets.UTF_8)
+        file.inputStream().use { input ->
+            val window = ByteArray(needle.size)
+            var filled = 0
+            var offset = 0L
+            while (true) {
+                val b = input.read()
+                if (b < 0) break
+                if (filled < needle.size) {
+                    window[filled++] = b.toByte()
+                } else {
+                    System.arraycopy(window, 1, window, 0, needle.size - 1)
+                    window[needle.size - 1] = b.toByte()
+                }
+                offset++
+                if (filled == needle.size && window.contentEquals(needle)) {
+                    return offset - needle.size
+                }
+            }
+        }
+        return null
     }
 
     private fun attachSurface(

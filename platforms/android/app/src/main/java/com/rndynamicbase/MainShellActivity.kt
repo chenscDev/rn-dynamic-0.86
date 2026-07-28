@@ -20,6 +20,7 @@ import com.rndynamic.loader.RNAssetBundleHelper
 import com.rndynamic.loader.MockApiService
 import com.rndynamic.loader.RNBundleMount
 import com.rndynamic.loader.RNBundleRemoteSettingsStore
+import com.rndynamic.loader.RNBundleWarmup
 import com.rndynamic.loader.RNEntryFragment
 import com.rndynamic.loader.RNRootTabFragment
 import com.rndynamic.loader.ShellConfigFile
@@ -150,6 +151,8 @@ class MainShellActivity : AppCompatActivity(), DefaultHardwareBackBtnHandler {
             try {
                 val config = resolveShellConfig()
                 ShellConfigHolder.config = config
+                // Shell 就绪后后台预热 rn-root Tab（如 docs-agent），与正式打开同一 resolver
+                scheduleRnRootWarmup(config)
                 runOnUiThread {
                     shellConfig = config
                     loadingView.visibility = View.GONE
@@ -162,6 +165,7 @@ class MainShellActivity : AppCompatActivity(), DefaultHardwareBackBtnHandler {
                 // 最终兜底：保证至少有原生壳
                 val fallback = MockApiService.fetchShellConfig(buildChannel)
                 ShellConfigHolder.config = fallback
+                scheduleRnRootWarmup(fallback)
                 runOnUiThread {
                     shellConfig = fallback
                     loadingView.visibility = View.GONE
@@ -170,6 +174,19 @@ class MainShellActivity : AppCompatActivity(), DefaultHardwareBackBtnHandler {
                     fallback.visibleTabs.firstOrNull()?.let { switchTab(it.id) }
                 }
             }
+        }
+    }
+
+    /** 空闲线程预热 rn-root 分包，失败静默 */
+    private fun scheduleRnRootWarmup(config: ShellConfigFile) {
+        thread(name = "RNBundleWarmup") {
+            RNBundleWarmup.warmupRnRootTabs(
+                context = applicationContext,
+                channel = buildChannel,
+                tabs = config.visibleTabs,
+                cacheDir = File(cacheDir, "RNDynamicBundles"),
+                options = RNBundleWarmup.Options(wifiOnly = false, silent = true),
+            )
         }
     }
 

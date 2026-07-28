@@ -53,6 +53,8 @@ class RNBundleConfigStore(
                         dependsOn = obj.nullableStringList("dependsOn"),
                         version = obj.nullableString("version"),
                         assetsUrl = obj.nullableString("assetsUrl"),
+                        bytecodeUrl = obj.nullableString("bytecodeUrl"),
+                        sizeBytes = if (obj.has("sizeBytes")) obj.optLong("sizeBytes") else null,
                         localPath = obj.nullableString("localPath"),
                     )
                 }

@@ -29,10 +29,14 @@ resolve_channel() {
 
 CHANNEL="$(resolve_channel)"
 
-# 与 MockApiService.allEntries 保持一致
-PAGE_KEYS=(login home order demo profile wallet message)
-# 仅 CDN 下发、不嵌入 APK 的页面（问答 Tab 等）；从 rn-biz 已发布配置合并 URL
-CDN_ONLY_KEYS=(docs-agent)
+# 最小内嵌：common + login（离线登录）；其余业务页走 CDN，减小 APK
+# 可用环境变量 EMBED_PAGE_KEYS 覆盖，例如 EMBED_PAGE_KEYS="login,home"
+PAGE_KEYS=(login)
+if [[ -n "${EMBED_PAGE_KEYS:-}" ]]; then
+  IFS=',' read -r -a PAGE_KEYS <<< "$EMBED_PAGE_KEYS"
+fi
+# 仅 CDN 下发、不嵌入 APK 的页面（问答 Tab + 其它业务入口）
+CDN_ONLY_KEYS=(docs-agent home order demo profile wallet message)
 
 ASSETS_ROOT="$ROOT/platforms/android/app/src/main/assets"
 BUNDLES_ASSETS="$ASSETS_ROOT/rn-bundles/$CHANNEL"

@@ -235,6 +235,8 @@ class RNBundleRemoteConfigStore(
                         dependsOn = obj.nullableStringList("dependsOn"),
                         version = obj.nullableString("version"),
                         assetsUrl = obj.nullableString("assetsUrl"),
+                        bytecodeUrl = obj.nullableString("bytecodeUrl"),
+                        sizeBytes = if (obj.has("sizeBytes")) obj.optLong("sizeBytes") else null,
                         localPath = obj.nullableString("localPath"),
                     )
                 }
@@ -265,6 +267,9 @@ class RNBundleRemoteConfigStore(
                             item.channel?.let { put("channel", it) }
                             item.kind?.let { put("kind", it) }
                             item.version?.let { put("version", it) }
+                            item.assetsUrl?.let { put("assetsUrl", it) }
+                            item.bytecodeUrl?.let { put("bytecodeUrl", it) }
+                            item.sizeBytes?.let { put("sizeBytes", it) }
                         },
                     )
                 }

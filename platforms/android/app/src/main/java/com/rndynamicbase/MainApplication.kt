@@ -8,9 +8,7 @@ import com.facebook.react.defaults.DefaultReactHost.getDefaultReactHost
 import com.rndynamic.loader.AuthSession
 import com.rndynamic.loader.HostPackageRegistry
 import com.rndynamic.loader.RNAssetBundleHelper
-import com.rndynamic.loader.RNBundleCache
-import com.rndynamic.loader.RNBundleConfigStore
-import com.rndynamic.loader.RNBundlePreloader
+import com.rndynamic.loader.RNBundleWarmup
 import java.io.File
 
 class MainApplication : Application(), ReactApplication {
@@ -27,15 +25,16 @@ class MainApplication : Application(), ReactApplication {
     AuthSession.init(applicationContext)
     loadReactNative(this)
 
-    // 后台预加载 common 分包到缓存，减少首次打开 RN 页面的等待时间
+    // 后台预热 common：走远程 resolver（revision/配置/hash），与正式打开一致
     Thread {
       try {
         val channel = RNAssetBundleHelper.readBuildChannel(applicationContext)
-        val configFile = RNAssetBundleHelper.ensureChannelConfig(applicationContext, channel)
-        val configStore = RNBundleConfigStore(configFile, channel)
-        val cache = RNBundleCache(File(cacheDir, "RNDynamicBundles"))
-        val preloader = RNBundlePreloader(configStore, cache)
-        preloader.preloadCommon()
+        RNBundleWarmup.warmupCommon(
+          context = applicationContext,
+          channel = channel,
+          cacheDir = File(cacheDir, "RNDynamicBundles"),
+          options = RNBundleWarmup.Options(wifiOnly = false, silent = true),
+        )
       } catch (_: Exception) {
         // 预加载失败不影响正常流程
       }

@@ -15,6 +15,9 @@ data class RNBundleItem(
     val dependsOn: List<String>? = null,
     val version: String? = null,
     val assetsUrl: String? = null,
+    /** Hermes bytecode CDN 地址（可选；双包合并场景仍用 JS） */
+    val bytecodeUrl: String? = null,
+    val sizeBytes: Long? = null,
     val localPath: String? = null,
 ) {
     val moduleName: String
