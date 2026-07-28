@@ -1,66 +1,31 @@
 /**
- * 示例分包：home（含分包内路由）
+ * 宿主 Metro 调试用 home 占位：正式业务在 rn-biz-0.86/src/home
+ * 保持可注册，避免本地 Metro 缺页。
  */
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
-import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { StyleSheet, Text, View } from 'react-native';
 import { createPackageApp, PageShell, registerPage } from '../_runtime';
-import { PlatformTag } from './PlatformTag';
 
-type HomeStackParamList = {
-  HomeMain: { fromNative?: string } | undefined;
-  HomeAbout: undefined;
-};
-
-type MainProps = NativeStackScreenProps<HomeStackParamList, 'HomeMain'>;
-type AboutProps = NativeStackScreenProps<HomeStackParamList, 'HomeAbout'>;
-
-function HomeMainScreen({ navigation, route }: MainProps): React.JSX.Element {
+function HomeMainScreen(): React.JSX.Element {
   return (
     <PageShell pageKey="home">
       <View style={styles.card}>
+        <Text style={styles.title}>AI 短视频（宿主占位）</Text>
         <Text style={styles.text}>
-          整页替换 Mode A：原生打开 home 分包后，内部可再路由切换。
+          完整创作 UI 在 rn-biz-0.86 的 home 分包。请用业务仓 Metro / CDN 分包调试。
         </Text>
-        <Text style={styles.meta}>
-          原生传入: {route.params?.fromNative ?? '(无)'}
-        </Text>
-        <PlatformTag />
-        <Pressable
-          style={styles.button}
-          onPress={() => navigation.navigate('HomeAbout')}>
-          <Text style={styles.buttonText}>进入 About 页</Text>
-        </Pressable>
       </View>
     </PageShell>
   );
 }
 
-function HomeAboutScreen({ navigation }: AboutProps): React.JSX.Element {
-  return (
-    <PageShell pageKey="home">
-      <View style={styles.card}>
-        <Text style={styles.text}>这是 home 分包内的二级页面。</Text>
-        <Pressable style={styles.button} onPress={() => navigation.goBack()}>
-          <Text style={styles.buttonText}>返回</Text>
-        </Pressable>
-      </View>
-    </PageShell>
-  );
-}
-
-const HomeApp = createPackageApp<HomeStackParamList>({
+const HomeApp = createPackageApp({
   initialRouteName: 'HomeMain',
   screens: [
     {
       name: 'HomeMain',
       component: HomeMainScreen,
-      options: { title: 'Home' },
-    },
-    {
-      name: 'HomeAbout',
-      component: HomeAboutScreen,
-      options: { title: 'About' },
+      options: { title: 'AI 短视频' },
     },
   ],
 });
@@ -76,15 +41,6 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     backgroundColor: '#FFFFFF',
   },
-  text: { fontSize: 16, lineHeight: 24, color: '#222' },
-  meta: { marginTop: 12, fontSize: 13, color: '#666' },
-  button: {
-    marginTop: 16,
-    alignSelf: 'flex-start',
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 8,
-    backgroundColor: '#1F6FEB',
-  },
-  buttonText: { color: '#FFF', fontWeight: '600' },
+  title: { fontSize: 18, fontWeight: '700', color: '#0F172A', marginBottom: 8 },
+  text: { fontSize: 15, lineHeight: 22, color: '#334155' },
 });
