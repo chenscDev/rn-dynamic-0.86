@@ -321,5 +321,43 @@ for line in "${PAGE_META_LINES[@]}"; do
   IFS='|' read -r key _ hash assets_url <<< "$line"
   echo "    $key: $assets_url (hash=$hash)"
 done
+
+# 仅保留本次内嵌文件，删除同目录旧 hash / CDN-only 残留，并清理其他 channel 缓存
+# KEEP 使用相对 rn-bundles 根目录的路径（COMMON_ASSETS_URL 去掉 rn-bundles/ 前缀）
+KEEP_REL=("${COMMON_ASSETS_URL#rn-bundles/}")
+for line in "${PAGE_META_LINES[@]}"; do
+  IFS='|' read -r _ _ _ assets_url <<< "$line"
+  KEEP_REL+=("${assets_url#rn-bundles/}")
+done
+echo "==> 清理 assets/rn-bundles 旧包..."
+python3 - "$ASSETS_ROOT/rn-bundles" "$CHANNEL" "${KEEP_REL[@]}" <<'PY'
+import os, shutil, sys
+root, channel, *keep_rel = sys.argv[1:]
+keep = {os.path.normpath(p) for p in keep_rel}
+channel_root = os.path.join(root, channel)
+removed = 0
+if os.path.isdir(channel_root):
+    for dirpath, _, filenames in os.walk(channel_root):
+        for name in filenames:
+            full = os.path.join(dirpath, name)
+            rel = os.path.relpath(full, root)
+            if os.path.normpath(rel) not in keep:
+                os.remove(full)
+                removed += 1
+                print(f"    删除 {rel}")
+    # 去掉空目录（如误留的 CDN-only 页）
+    for dirpath, dirnames, filenames in os.walk(channel_root, topdown=False):
+        if not dirnames and not filenames:
+            os.rmdir(dirpath)
+            print(f"    删除空目录 {os.path.relpath(dirpath, root)}")
+for name in os.listdir(root):
+    path = os.path.join(root, name)
+    if name != channel and os.path.isdir(path):
+        shutil.rmtree(path)
+        removed += 1
+        print(f"    删除 channel 目录 {name}/")
+print(f"==> 已清理 {removed} 项旧包，保留 channel={channel}")
+PY
+
 echo "==> 远程热更（联调时改 remote.local.json enabled=true）:"
 echo "    GET $CDN_BASE_URL/config/$RN_VERSION/$CHANNEL"
