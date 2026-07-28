@@ -1,13 +1,13 @@
 {
   "rnVersion": "0.86.0",
   "channel": "agent-docx",
-  "updatedAt": "2026-07-28T04:20:00.000Z",
+  "updatedAt": "2026-07-23T04:00:00.000Z",
   "tabs": [
     {
       "id": "home",
       "title": "首页",
-      "type": "rn-root",
-      "bundleKey": "home",
+      "type": "native",
+      "nativeKey": "home",
       "icon": "ic_tab_home",
       "visible": true,
       "order": 0
@@ -30,39 +30,18 @@
       "order": 2,
       "entries": [
         {
-          "key": "order",
-          "title": "订单",
-          "icon": "ic_entry_order",
+          "key": "home",
+          "title": "Home",
+          "icon": "ic_entry_home",
           "visible": true,
           "order": 0
         },
         {
-          "key": "demo",
-          "title": "Demo",
-          "icon": "ic_entry_home",
-          "visible": true,
-          "order": 1
-        },
-        {
-          "key": "profile",
-          "title": "我的资料",
-          "icon": "ic_tab_mine",
-          "visible": true,
-          "order": 2
-        },
-        {
-          "key": "wallet",
-          "title": "钱包",
+          "key": "order",
+          "title": "订单",
           "icon": "ic_entry_order",
           "visible": true,
-          "order": 3
-        },
-        {
-          "key": "message",
-          "title": "消息",
-          "icon": "ic_entry_home",
-          "visible": true,
-          "order": 4
+          "order": 1
         }
       ]
     },
