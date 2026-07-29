@@ -16,8 +16,8 @@ import com.facebook.react.uimanager.annotations.ReactProp
 import com.facebook.react.uimanager.events.RCTEventEmitter
 
 /**
- * 宿主内置成片播放器（VideoView）：成片 App 内播放主路径，不依赖 WebView。
- * JS：requireNativeComponent('RNMediaPlayer')
+ * 宿主内置成片播放器（VideoView）。
+ * 注意：Fabric 下必须在 onLayout 强制给 VideoView 宽高，否则常见黑屏。
  */
 class RNMediaPlayerViewManager : SimpleViewManager<RNMediaPlayerView>() {
     override fun getName(): String = REACT_CLASS
@@ -69,11 +69,13 @@ class RNMediaPlayerView(
     private var muted = false
     private var prepared = false
     private var mediaPlayer: MediaPlayer? = null
+    private var pendingUri: Uri? = null
+    private var readyDispatched = false
 
     init {
-        setBackgroundColor(Color.BLACK)
-        // 避免被兄弟层盖住；成片区由 RN 给固定高度
-        videoView.setZOrderMediaOverlay(false)
+        // 透明底：未出画前由 RN 封面托底，避免黑块
+        setBackgroundColor(Color.TRANSPARENT)
+        videoView.setBackgroundColor(Color.TRANSPARENT)
         addView(
             videoView,
             LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT, Gravity.CENTER),
@@ -83,7 +85,6 @@ class RNMediaPlayerView(
             mediaPlayer = mp
             mp.isLooping = false
             applyMute(mp)
-            // 按容器比例居中裁切，减少黑边闪烁
             try {
                 mp.setVideoScalingMode(MediaPlayer.VIDEO_SCALING_MODE_SCALE_TO_FIT)
             } catch (_: Exception) {
@@ -92,7 +93,8 @@ class RNMediaPlayerView(
             if (!paused) {
                 videoView.start()
             }
-            dispatch(RNMediaPlayerViewManager.EVENT_READY, Arguments.createMap())
+            // 真正出画前也可先通知；渲染开始再补一次
+            dispatchReadyOnce()
         }
         videoView.setOnCompletionListener {
             dispatch(RNMediaPlayerViewManager.EVENT_END, Arguments.createMap())
@@ -100,6 +102,7 @@ class RNMediaPlayerView(
         videoView.setOnErrorListener { _, what, extra ->
             prepared = false
             mediaPlayer = null
+            readyDispatched = false
             val map = Arguments.createMap()
             map.putInt("what", what)
             map.putInt("extra", extra)
@@ -108,11 +111,24 @@ class RNMediaPlayerView(
             true
         }
         videoView.setOnInfoListener { _, what, _ ->
-            // 缓冲结束可视为可播
             if (what == MediaPlayer.MEDIA_INFO_VIDEO_RENDERING_START) {
-                dispatch(RNMediaPlayerViewManager.EVENT_READY, Arguments.createMap())
+                dispatchReadyOnce()
             }
             false
+        }
+    }
+
+    override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
+        super.onLayout(changed, left, top, right, bottom)
+        val w = right - left
+        val h = bottom - top
+        if (w > 0 && h > 0) {
+            // Fabric 下 VideoView 常拿不到尺寸 → 黑屏；强制铺满
+            videoView.layout(0, 0, w, h)
+            pendingUri?.let { uri ->
+                pendingUri = null
+                tryAttach(uri)
+            }
         }
     }
 
@@ -124,11 +140,22 @@ class RNMediaPlayerView(
         source = next
         prepared = false
         mediaPlayer = null
+        readyDispatched = false
+        val uri = Uri.parse(next)
+        if (width <= 0 || height <= 0) {
+            // 等 layout 后再挂载，避免 0 尺寸起播
+            pendingUri = uri
+            requestLayout()
+            return
+        }
+        tryAttach(uri)
+    }
+
+    private fun tryAttach(uri: Uri) {
         try {
             videoView.stopPlayback()
-            videoView.setVideoURI(Uri.parse(next))
+            videoView.setVideoURI(uri)
             videoView.requestFocus()
-            // 等 onPrepared 再 start，避免未就绪 start 导致黑屏
         } catch (error: Exception) {
             val map = Arguments.createMap()
             map.putString("message", error.message ?: "setSource failed")
@@ -149,7 +176,6 @@ class RNMediaPlayerView(
             } else if (prepared) {
                 videoView.start()
             }
-            // 未 prepared 时由 onPrepared 根据 paused 决定是否 start
         } catch (_: Exception) {
             // ignore
         }
@@ -169,13 +195,21 @@ class RNMediaPlayerView(
         }
     }
 
+    private fun dispatchReadyOnce() {
+        if (readyDispatched) {
+            return
+        }
+        readyDispatched = true
+        dispatch(RNMediaPlayerViewManager.EVENT_READY, Arguments.createMap())
+    }
+
     private fun dispatch(eventName: String, payload: WritableMap) {
         val ctx = reactContext as? ReactContext ?: return
         try {
             ctx.getJSModule(RCTEventEmitter::class.java)
                 .receiveEvent(id, eventName, payload)
         } catch (_: Exception) {
-            // Bridgeless 下偶发 emitter 未就绪，忽略以免拖垮播放
+            // Bridgeless 下偶发 emitter 未就绪
         }
     }
 }
