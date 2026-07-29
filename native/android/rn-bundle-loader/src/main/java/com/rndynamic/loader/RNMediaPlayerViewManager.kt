@@ -216,10 +216,7 @@ class RNMediaPlayerView(
             val dispatcher = UIManagerHelper.getEventDispatcherForReactTag(reactContext, id)
             if (dispatcher != null) {
                 dispatcher.dispatchEvent(
-                    object : Event<Event<*>>(surfaceId, id) {
-                        override fun getEventName(): String = eventName
-                        override fun getEventData(): WritableMap = payload
-                    },
+                    MediaPlayerEvent(surfaceId, id, eventName, payload),
                 )
                 return
             }
@@ -234,5 +231,17 @@ class RNMediaPlayerView(
         } catch (_: Exception) {
             // Bridgeless 下偶发 emitter 未就绪；JS 侧不依赖此事件揭层
         }
+    }
+
+    /** Fabric Event 必须是具体自引用类型，不能用 Event<Event<*>> */
+    private class MediaPlayerEvent(
+        surfaceId: Int,
+        viewTag: Int,
+        private val name: String,
+        private val data: WritableMap,
+    ) : Event<MediaPlayerEvent>(surfaceId, viewTag) {
+        override fun getEventName(): String = name
+
+        override fun getEventData(): WritableMap = data
     }
 }
