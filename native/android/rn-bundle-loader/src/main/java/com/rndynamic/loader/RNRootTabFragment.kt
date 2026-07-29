@@ -44,13 +44,58 @@ class RNRootTabFragment : Fragment() {
 
     private fun startMount() {
         mountArea.removeAllViews()
-        val loading = TextView(requireContext()).apply {
-            text = "加载中：解析配置 → 下载/缓存 → 合并 → 挂载…"
-            textSize = 13f
-            gravity = Gravity.CENTER
-            setPadding(32, 32, 32, 32)
+        val ctx = requireContext()
+        val density = resources.displayMetrics.density
+        fun dp(v: Int) = (v * density).toInt()
+
+        // 内容层 + 顶层友好 loading：挂载完成前不拆掉 overlay，避免中间空白一闪
+        val contentHost = FrameLayout(ctx).apply {
+            setBackgroundColor(0xFFF5F5F5.toInt())
         }
-        mountArea.addView(loading)
+        val statusText = TextView(ctx).apply {
+            text = "正在打开…"
+            textSize = 16f
+            setTypeface(typeface, android.graphics.Typeface.BOLD)
+            setTextColor(0xFF111111.toInt())
+            gravity = Gravity.CENTER_HORIZONTAL
+        }
+        val hintText = TextView(ctx).apply {
+            text = "马上就好"
+            textSize = 13f
+            setTextColor(0xFF888888.toInt())
+            gravity = Gravity.CENTER_HORIZONTAL
+            setPadding(0, dp(8), 0, 0)
+        }
+        val loadingOverlay = LinearLayout(ctx).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            setBackgroundColor(0xFFF5F5F5.toInt())
+            setPadding(dp(24), dp(24), dp(24), dp(24))
+            elevation = dp(4).toFloat()
+            addView(android.widget.ProgressBar(ctx))
+            addView(
+                statusText,
+                LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                ).apply { topMargin = dp(16) },
+            )
+            addView(hintText)
+        }
+        mountArea.addView(
+            contentHost,
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT,
+            ),
+        )
+        mountArea.addView(
+            loadingOverlay,
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT,
+            ),
+        )
 
         thread(name = "RNRootTabMount") {
             val channelName = channel.ifBlank {
@@ -59,22 +104,31 @@ class RNRootTabFragment : Fragment() {
             val session = RNBundleLoadTrace.beginSession(bundleKey, channelName)
             try {
                 activity?.runOnUiThread {
-                    if (isAdded) loading.text = "① 解析配置 / 拉取分包…"
+                    if (isAdded) {
+                        statusText.text = "正在打开…"
+                        hintText.text = "马上就好"
+                    }
                 }
                 val request = buildRequest(bundleKey, channelName, configPath)
                 if (!isAdded) return@thread
                 val act = activity ?: return@thread
-                val uiReady = java.util.concurrent.CountDownLatch(1)
-                act.runOnUiThread {
-                    if (isAdded) mountArea.removeAllViews()
-                    uiReady.countDown()
-                }
-                uiReady.await()
-                RNBundleMount.mount(act, mountArea, request)
+                RNBundleMount.mount(act, contentHost, request)
                 val report = session.finish(act.applicationContext)
                 RNLoadPerfHolder.lastReport = report
                 RNBundleLoadTrace.clear()
-                // 加载明细改由 RN PageShell 顶部可展开条展示，避免底部浮层重复
+                act.runOnUiThread {
+                    if (!isAdded) return@runOnUiThread
+                    // 轻淡出，避免生硬切换
+                    loadingOverlay.animate()
+                        .alpha(0f)
+                        .setDuration(160L)
+                        .withEndAction {
+                            if (isAdded) {
+                                mountArea.removeView(loadingOverlay)
+                            }
+                        }
+                        .start()
+                }
             } catch (error: Exception) {
                 RNBundleLoadTrace.clear()
                 Log.e(TAG, "RN Tab 挂载失败", error)

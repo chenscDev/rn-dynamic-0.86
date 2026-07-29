@@ -51,18 +51,19 @@ class RNContainerActivity : AppCompatActivity(), DefaultHardwareBackBtnHandler {
         window.decorView.setBackgroundColor(0xFFF5F5F5.toInt())
 
         loadingTitle = TextView(this).apply {
-            text = "正在加载分包…"
+            text = "正在打开…"
             textSize = 16f
             setTypeface(typeface, android.graphics.Typeface.BOLD)
             setTextColor(0xFF111111.toInt())
             gravity = Gravity.CENTER_HORIZONTAL
         }
         loadingDetail = TextView(this).apply {
-            text = "解析包路径中…"
-            textSize = 12f
-            setTextColor(0xFF555555.toInt())
+            text = "马上就好"
+            textSize = 13f
+            setTextColor(0xFF888888.toInt())
             setLineSpacing(dp(2).toFloat(), 1.15f)
             setPadding(dp(20), dp(12), dp(20), 0)
+            gravity = Gravity.CENTER_HORIZONTAL
         }
         loadingView = ScrollView(this).apply {
             setBackgroundColor(0xFFF5F5F5.toInt())
@@ -159,11 +160,14 @@ class RNContainerActivity : AppCompatActivity(), DefaultHardwareBackBtnHandler {
                 ?: "unknown"
             val session = RNBundleLoadTrace.beginSession(bundleKey, channel)
             try {
-                updateLoading("解析分包配置…", "channel / bundleKey / assets / cache")
+                updateLoading("正在打开…", "马上就好")
                 val request = buildMountRequest()
                 if (isActivityDestroyed) return@thread
-                showResolvedPaths(request)
-                updateLoading("挂载 ReactHost…", loadingDetail.text?.toString().orEmpty())
+                if (isDebuggableBuild()) {
+                    showResolvedPaths(request)
+                } else {
+                    updateLoading("正在打开…", "马上就好")
+                }
                 RNBundleMount.mount(this, rnContainer, request)
                 if (isActivityDestroyed) return@thread
                 val report = session.finish(applicationContext)
@@ -171,9 +175,16 @@ class RNContainerActivity : AppCompatActivity(), DefaultHardwareBackBtnHandler {
                 RNBundleLoadTrace.clear()
                 runOnUiThread {
                     if (!isFinishing && !isDestroyed) {
-                        loadingDetail.text = report.toReadableText()
-                        loadingView.visibility = View.GONE
-                        // 加载明细改由 RN PageShell 顶部可展开条展示，避免底部浮层重复
+                        loadingView.animate()
+                            .alpha(0f)
+                            .setDuration(160L)
+                            .withEndAction {
+                                if (!isFinishing && !isDestroyed) {
+                                    loadingView.visibility = View.GONE
+                                    loadingView.alpha = 1f
+                                }
+                            }
+                            .start()
                         RNBundleMount.forwardOnHostResume(this)
                     }
                 }
@@ -376,6 +387,10 @@ class RNContainerActivity : AppCompatActivity(), DefaultHardwareBackBtnHandler {
 
     private fun isLoginContainer(): Boolean {
         return intent.getStringExtra(EXTRA_CONTAINER_KIND) == CONTAINER_KIND_LOGIN
+    }
+
+    private fun isDebuggableBuild(): Boolean {
+        return (applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0
     }
 
     private fun dp(value: Int): Int {
