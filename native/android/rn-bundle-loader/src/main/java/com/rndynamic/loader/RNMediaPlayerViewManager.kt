@@ -12,12 +12,17 @@ import com.facebook.react.bridge.WritableMap
 import com.facebook.react.common.MapBuilder
 import com.facebook.react.uimanager.SimpleViewManager
 import com.facebook.react.uimanager.ThemedReactContext
+import com.facebook.react.uimanager.UIManagerHelper
 import com.facebook.react.uimanager.annotations.ReactProp
+import com.facebook.react.uimanager.events.Event
 import com.facebook.react.uimanager.events.RCTEventEmitter
 
 /**
  * 宿主内置成片播放器（VideoView）。
- * 注意：Fabric 下必须在 onLayout 强制给 VideoView 宽高，否则常见黑屏。
+ *
+ * P0：
+ * - Fabric 下必须在 onLayout 强制给 VideoView 宽高，否则黑屏
+ * - Bridgeless 下优先走 EventDispatcher，RCTEventEmitter 经常发不出 onReady
  */
 class RNMediaPlayerViewManager : SimpleViewManager<RNMediaPlayerView>() {
     override fun getName(): String = REACT_CLASS
@@ -73,8 +78,7 @@ class RNMediaPlayerView(
     private var readyDispatched = false
 
     init {
-        // 透明底：未出画前由 RN 封面托底，避免黑块
-        setBackgroundColor(Color.TRANSPARENT)
+        setBackgroundColor(Color.BLACK)
         videoView.setBackgroundColor(Color.TRANSPARENT)
         addView(
             videoView,
@@ -91,9 +95,12 @@ class RNMediaPlayerView(
                 // ignore
             }
             if (!paused) {
-                videoView.start()
+                try {
+                    videoView.start()
+                } catch (_: Exception) {
+                    // ignore
+                }
             }
-            // 真正出画前也可先通知；渲染开始再补一次
             dispatchReadyOnce()
         }
         videoView.setOnCompletionListener {
@@ -143,7 +150,6 @@ class RNMediaPlayerView(
         readyDispatched = false
         val uri = Uri.parse(next)
         if (width <= 0 || height <= 0) {
-            // 等 layout 后再挂载，避免 0 尺寸起播
             pendingUri = uri
             requestLayout()
             return
@@ -204,12 +210,29 @@ class RNMediaPlayerView(
     }
 
     private fun dispatch(eventName: String, payload: WritableMap) {
-        val ctx = reactContext as? ReactContext ?: return
+        // Bridgeless / Fabric：优先 EventDispatcher
         try {
+            val surfaceId = UIManagerHelper.getSurfaceId(this)
+            val dispatcher = UIManagerHelper.getEventDispatcherForReactTag(reactContext, id)
+            if (dispatcher != null) {
+                dispatcher.dispatchEvent(
+                    object : Event<Event<*>>(surfaceId, id) {
+                        override fun getEventName(): String = eventName
+                        override fun getEventData(): WritableMap = payload
+                    },
+                )
+                return
+            }
+        } catch (_: Exception) {
+            // fall through
+        }
+        // 旧桥兜底
+        try {
+            val ctx = reactContext as? ReactContext ?: return
             ctx.getJSModule(RCTEventEmitter::class.java)
                 .receiveEvent(id, eventName, payload)
         } catch (_: Exception) {
-            // Bridgeless 下偶发 emitter 未就绪
+            // Bridgeless 下偶发 emitter 未就绪；JS 侧不依赖此事件揭层
         }
     }
 }
