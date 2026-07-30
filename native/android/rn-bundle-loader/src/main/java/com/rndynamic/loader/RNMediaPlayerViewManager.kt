@@ -3,6 +3,8 @@ package com.rndynamic.loader
 import android.graphics.Color
 import android.media.MediaPlayer
 import android.net.Uri
+import android.os.Handler
+import android.os.Looper
 import android.view.Gravity
 import android.widget.FrameLayout
 import android.widget.VideoView
@@ -20,9 +22,9 @@ import com.facebook.react.uimanager.events.RCTEventEmitter
 /**
  * 宿主内置成片播放器（VideoView）。
  *
- * P0：
  * - Fabric 下必须在 onLayout 强制给 VideoView 宽高，否则黑屏
- * - Bridgeless 下优先走 EventDispatcher，RCTEventEmitter 经常发不出 onReady
+ * - Bridgeless 下优先走 EventDispatcher
+ * - 定期派发 onProgress，供页内进度条使用
  */
 class RNMediaPlayerViewManager : SimpleViewManager<RNMediaPlayerView>() {
     override fun getName(): String = REACT_CLASS
@@ -46,15 +48,24 @@ class RNMediaPlayerViewManager : SimpleViewManager<RNMediaPlayerView>() {
         view.setMuted(muted)
     }
 
-    override fun getExportedCustomDirectEventTypeConstants(): MutableMap<String, Any> {
-        return MapBuilder.of(
-            EVENT_READY,
-            MapBuilder.of("registrationName", "onReady"),
-            EVENT_ERROR,
-            MapBuilder.of("registrationName", "onError"),
-            EVENT_END,
-            MapBuilder.of("registrationName", "onEnd"),
-        )
+    /** 跳转秒数；需配合 seekNonce 变化才会重复生效 */
+    @ReactProp(name = "seekTo", defaultDouble = -1.0)
+    fun setSeekTo(view: RNMediaPlayerView, seconds: Double) {
+        view.setSeekTarget(seconds)
+    }
+
+    @ReactProp(name = "seekNonce", defaultDouble = 0.0)
+    fun setSeekNonce(view: RNMediaPlayerView, nonce: Double) {
+        view.applySeekNonce(nonce)
+    }
+
+    override fun getExportedCustomDirectEventTypeConstants(): MutableMap<String, Any>? {
+        return MapBuilder.builder<String, Any>()
+            .put(EVENT_READY, MapBuilder.of("registrationName", "onReady"))
+            .put(EVENT_ERROR, MapBuilder.of("registrationName", "onError"))
+            .put(EVENT_END, MapBuilder.of("registrationName", "onEnd"))
+            .put(EVENT_PROGRESS, MapBuilder.of("registrationName", "onProgress"))
+            .build()
     }
 
     companion object {
@@ -62,6 +73,7 @@ class RNMediaPlayerViewManager : SimpleViewManager<RNMediaPlayerView>() {
         const val EVENT_READY = "topReady"
         const val EVENT_ERROR = "topError"
         const val EVENT_END = "topEnd"
+        const val EVENT_PROGRESS = "topProgress"
     }
 }
 
@@ -76,6 +88,17 @@ class RNMediaPlayerView(
     private var mediaPlayer: MediaPlayer? = null
     private var pendingUri: Uri? = null
     private var readyDispatched = false
+    private var seekTargetSec = -1.0
+    private var lastSeekNonce = -1.0
+
+    private val progressHandler = Handler(Looper.getMainLooper())
+    private val progressTick =
+        object : Runnable {
+            override fun run() {
+                emitProgress()
+                progressHandler.postDelayed(this, 250L)
+            }
+        }
 
     init {
         setBackgroundColor(Color.BLACK)
@@ -90,6 +113,7 @@ class RNMediaPlayerView(
             mp.isLooping = false
             applyMute(mp)
             try {
+                // 保持比例，避免竖屏成片在矮容器里被拉伸挤压
                 mp.setVideoScalingMode(MediaPlayer.VIDEO_SCALING_MODE_SCALE_TO_FIT)
             } catch (_: Exception) {
                 // ignore
@@ -101,15 +125,19 @@ class RNMediaPlayerView(
                     // ignore
                 }
             }
-            dispatchReadyOnce()
+            dispatchReadyOnce(mp)
+            startProgressTicks()
         }
         videoView.setOnCompletionListener {
+            stopProgressTicks()
+            emitProgress(forceEnded = true)
             dispatch(RNMediaPlayerViewManager.EVENT_END, Arguments.createMap())
         }
         videoView.setOnErrorListener { _, what, extra ->
             prepared = false
             mediaPlayer = null
             readyDispatched = false
+            stopProgressTicks()
             val map = Arguments.createMap()
             map.putInt("what", what)
             map.putInt("extra", extra)
@@ -119,10 +147,22 @@ class RNMediaPlayerView(
         }
         videoView.setOnInfoListener { _, what, _ ->
             if (what == MediaPlayer.MEDIA_INFO_VIDEO_RENDERING_START) {
-                dispatchReadyOnce()
+                mediaPlayer?.let { dispatchReadyOnce(it) }
             }
             false
         }
+    }
+
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        if (prepared) {
+            startProgressTicks()
+        }
+    }
+
+    override fun onDetachedFromWindow() {
+        stopProgressTicks()
+        super.onDetachedFromWindow()
     }
 
     override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
@@ -148,6 +188,7 @@ class RNMediaPlayerView(
         prepared = false
         mediaPlayer = null
         readyDispatched = false
+        stopProgressTicks()
         val uri = Uri.parse(next)
         if (width <= 0 || height <= 0) {
             pendingUri = uri
@@ -179,8 +220,10 @@ class RNMediaPlayerView(
                 if (videoView.isPlaying) {
                     videoView.pause()
                 }
+                emitProgress()
             } else if (prepared) {
                 videoView.start()
+                startProgressTicks()
             }
         } catch (_: Exception) {
             // ignore
@@ -192,6 +235,27 @@ class RNMediaPlayerView(
         mediaPlayer?.let { applyMute(it) }
     }
 
+    fun setSeekTarget(seconds: Double) {
+        seekTargetSec = seconds
+    }
+
+    fun applySeekNonce(nonce: Double) {
+        if (nonce == lastSeekNonce) {
+            return
+        }
+        lastSeekNonce = nonce
+        if (seekTargetSec < 0 || !prepared) {
+            return
+        }
+        try {
+            val ms = (seekTargetSec * 1000.0).toInt().coerceAtLeast(0)
+            videoView.seekTo(ms)
+            emitProgress()
+        } catch (_: Exception) {
+            // ignore
+        }
+    }
+
     private fun applyMute(mp: MediaPlayer) {
         try {
             val vol = if (muted) 0f else 1f
@@ -201,12 +265,56 @@ class RNMediaPlayerView(
         }
     }
 
-    private fun dispatchReadyOnce() {
+    private fun dispatchReadyOnce(mp: MediaPlayer) {
         if (readyDispatched) {
             return
         }
         readyDispatched = true
-        dispatch(RNMediaPlayerViewManager.EVENT_READY, Arguments.createMap())
+        val map = Arguments.createMap()
+        try {
+            map.putInt("videoWidth", mp.videoWidth)
+            map.putInt("videoHeight", mp.videoHeight)
+            map.putDouble("duration", (mp.duration.coerceAtLeast(0)) / 1000.0)
+        } catch (_: Exception) {
+            map.putInt("videoWidth", 0)
+            map.putInt("videoHeight", 0)
+            map.putDouble("duration", 0.0)
+        }
+        dispatch(RNMediaPlayerViewManager.EVENT_READY, map)
+        emitProgress()
+    }
+
+    private fun startProgressTicks() {
+        progressHandler.removeCallbacks(progressTick)
+        progressHandler.post(progressTick)
+    }
+
+    private fun stopProgressTicks() {
+        progressHandler.removeCallbacks(progressTick)
+    }
+
+    private fun emitProgress(forceEnded: Boolean = false) {
+        if (!prepared && !forceEnded) {
+            return
+        }
+        val map = Arguments.createMap()
+        try {
+            val durationMs = videoView.duration.coerceAtLeast(0)
+            val currentMs =
+                if (forceEnded && durationMs > 0) {
+                    durationMs
+                } else {
+                    videoView.currentPosition.coerceAtLeast(0)
+                }
+            map.putDouble("currentTime", currentMs / 1000.0)
+            map.putDouble("duration", durationMs / 1000.0)
+            map.putBoolean("playing", !paused && videoView.isPlaying)
+        } catch (_: Exception) {
+            map.putDouble("currentTime", 0.0)
+            map.putDouble("duration", 0.0)
+            map.putBoolean("playing", false)
+        }
+        dispatch(RNMediaPlayerViewManager.EVENT_PROGRESS, map)
     }
 
     private fun dispatch(eventName: String, payload: WritableMap) {
