@@ -23,7 +23,8 @@ import com.facebook.react.uimanager.events.RCTEventEmitter
  * 宿主页内成片播放器。
  *
  * - 容器高度由 JS 固定（小屏友好）
- * - VideoView 在容器内按片源比例 contain 居中（可留黑边，不拉扁）
+ * - VideoView 铺满容器；由 MediaPlayer SCALE_TO_FIT 做 contain（可留黑边）
+ * - 切勿在 onLayout 里手动缩小 VideoView：Surface 会被毁掉，表现为黑屏无声
  * - 不用系统 MediaController（会浮在窗口上，ScrollView 滚动时错位）
  * - 进度由 onProgress 交给 RN 页内一体控件
  */
@@ -91,8 +92,6 @@ class RNMediaPlayerView(
     private var mediaPlayer: MediaPlayer? = null
     private var pendingUri: Uri? = null
     private var readyDispatched = false
-    private var videoWidth = 0
-    private var videoHeight = 0
     private var seekTargetSec = -1.0
     private var lastSeekNonce = -1.0
 
@@ -108,7 +107,7 @@ class RNMediaPlayerView(
     init {
         setBackgroundColor(Color.BLACK)
         clipChildren = true
-        videoView.setBackgroundColor(Color.TRANSPARENT)
+        videoView.setBackgroundColor(Color.BLACK)
         addView(
             videoView,
             LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT, Gravity.CENTER),
@@ -119,19 +118,12 @@ class RNMediaPlayerView(
             mediaPlayer = mp
             mp.isLooping = false
             applyMute(mp)
-            try {
-                videoWidth = mp.videoWidth
-                videoHeight = mp.videoHeight
-            } catch (_: Exception) {
-                videoWidth = 0
-                videoHeight = 0
-            }
+            // 在铺满的 VideoView 内等比完整显示（黑边由容器底色体现）
             try {
                 mp.setVideoScalingMode(MediaPlayer.VIDEO_SCALING_MODE_SCALE_TO_FIT)
             } catch (_: Exception) {
                 // ignore
             }
-            requestLayout()
             if (!paused) {
                 try {
                     videoView.start()
@@ -151,8 +143,6 @@ class RNMediaPlayerView(
             prepared = false
             mediaPlayer = null
             readyDispatched = false
-            videoWidth = 0
-            videoHeight = 0
             stopProgressTicks()
             val map = Arguments.createMap()
             map.putInt("what", what)
@@ -173,6 +163,13 @@ class RNMediaPlayerView(
         super.onAttachedToWindow()
         if (prepared && !paused) {
             startProgressTicks()
+            try {
+                if (!videoView.isPlaying) {
+                    videoView.start()
+                }
+            } catch (_: Exception) {
+                // ignore
+            }
         }
     }
 
@@ -182,41 +179,12 @@ class RNMediaPlayerView(
     }
 
     override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
-        val w = right - left
-        val h = bottom - top
-        if (w <= 0 || h <= 0) {
-            return
-        }
-        layoutVideoContain(w, h)
+        // 必须走 FrameLayout 默认布局；手动缩小 VideoView 会导致 Surface 黑屏无声
+        super.onLayout(changed, left, top, right, bottom)
         pendingUri?.let { uri ->
             pendingUri = null
             tryAttach(uri)
         }
-    }
-
-    /** 固定容器内等比完整可见 */
-    private fun layoutVideoContain(containerW: Int, containerH: Int) {
-        val vw = videoWidth
-        val vh = videoHeight
-        val (dw, dh) =
-            if (vw > 0 && vh > 0) {
-                val videoRatio = vw.toFloat() / vh.toFloat()
-                val boxRatio = containerW.toFloat() / containerH.toFloat()
-                if (videoRatio > boxRatio) {
-                    val width = containerW
-                    val height = (containerW / videoRatio).toInt().coerceAtLeast(1)
-                    width to height
-                } else {
-                    val height = containerH
-                    val width = (containerH * videoRatio).toInt().coerceAtLeast(1)
-                    width to height
-                }
-            } else {
-                containerW to containerH
-            }
-        val childLeft = (containerW - dw) / 2
-        val childTop = (containerH - dh) / 2
-        videoView.layout(childLeft, childTop, childLeft + dw, childTop + dh)
     }
 
     fun setSource(src: String?) {
@@ -228,8 +196,6 @@ class RNMediaPlayerView(
         prepared = false
         mediaPlayer = null
         readyDispatched = false
-        videoWidth = 0
-        videoHeight = 0
         stopProgressTicks()
         val uri = Uri.parse(next)
         if (width <= 0 || height <= 0) {
