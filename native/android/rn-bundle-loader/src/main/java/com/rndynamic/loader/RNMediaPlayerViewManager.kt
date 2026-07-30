@@ -60,6 +60,12 @@ class RNMediaPlayerViewManager : SimpleViewManager<RNMediaPlayerView>() {
         view.applySeekNonce(nonce)
     }
 
+    /** JS 侧重试时递增，强制同 URL 重新装载 */
+    @ReactProp(name = "reloadNonce", defaultDouble = 0.0)
+    fun setReloadNonce(view: RNMediaPlayerView, nonce: Double) {
+        view.applyReloadNonce(nonce)
+    }
+
     override fun getExportedCustomDirectEventTypeConstants(): MutableMap<String, Any>? {
         return HashMap(
             MapBuilder.builder<String, Any>()
@@ -94,6 +100,7 @@ class RNMediaPlayerView(
     private var readyDispatched = false
     private var seekTargetSec = -1.0
     private var lastSeekNonce = -1.0
+    private var lastReloadNonce = -1.0
 
     private val progressHandler = Handler(Looper.getMainLooper())
     private val progressTick =
@@ -189,9 +196,29 @@ class RNMediaPlayerView(
 
     fun setSource(src: String?) {
         val next = src?.trim().orEmpty()
-        if (next.isEmpty() || next == source) {
+        if (next.isEmpty()) {
             return
         }
+        // 同 URL 默认不重复装载；需要重试时走 applyReloadNonce
+        if (next == source && prepared) {
+            return
+        }
+        attachSource(next, force = next == source)
+    }
+
+    fun applyReloadNonce(nonce: Double) {
+        if (nonce == lastReloadNonce) {
+            return
+        }
+        lastReloadNonce = nonce
+        val current = source
+        if (current.isNullOrBlank()) {
+            return
+        }
+        attachSource(current, force = true)
+    }
+
+    private fun attachSource(next: String, force: Boolean) {
         source = next
         prepared = false
         mediaPlayer = null
@@ -202,6 +229,13 @@ class RNMediaPlayerView(
             pendingUri = uri
             requestLayout()
             return
+        }
+        if (force) {
+            try {
+                videoView.stopPlayback()
+            } catch (_: Exception) {
+                // ignore
+            }
         }
         tryAttach(uri)
     }
@@ -304,6 +338,16 @@ class RNMediaPlayerView(
     private fun emitProgress(forceEnded: Boolean = false) {
         if (!prepared && !forceEnded) {
             return
+        }
+        // 部分机型 onPrepared 后事件桥接丢失：用进度再补一次 ready
+        if (prepared && !readyDispatched) {
+            mediaPlayer?.let { dispatchReadyOnce(it) }
+                ?: run {
+                    readyDispatched = true
+                    val map = Arguments.createMap()
+                    map.putDouble("duration", (videoView.duration.coerceAtLeast(0)) / 1000.0)
+                    dispatch(RNMediaPlayerViewManager.EVENT_READY, map)
+                }
         }
         val map = Arguments.createMap()
         try {
