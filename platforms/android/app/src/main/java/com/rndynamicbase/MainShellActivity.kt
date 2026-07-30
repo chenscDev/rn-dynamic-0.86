@@ -262,6 +262,11 @@ class MainShellActivity : AppCompatActivity(), DefaultHardwareBackBtnHandler {
             .commit()
     }
 
+    /** 供 RN 桥接调用：切换底部 Tab */
+    fun switchToTab(tabId: String) {
+        switchTab(tabId)
+    }
+
     private fun updateTabStyles(selectedId: String) {
         val selectedColor = 0xFF111111.toInt()
         val normalColor = 0xFF888888.toInt()

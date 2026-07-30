@@ -291,6 +291,16 @@ class RNContainerActivity : AppCompatActivity(), DefaultHardwareBackBtnHandler {
             putString("fromNative", intent.getStringExtra(EXTRA_FROM_NATIVE) ?: "container")
             putString("channel", channel)
         }
+        // 兜底补齐入口字段（旧 Intent 可能只有部分 props）
+        if (!props.containsKey("fromNative") || props.getString("fromNative").isNullOrBlank()) {
+            props.putString(
+                "fromNative",
+                intent.getStringExtra(EXTRA_FROM_NATIVE) ?: "container",
+            )
+        }
+        if (!props.containsKey("channel") || props.getString("channel").isNullOrBlank()) {
+            props.putString("channel", channel)
+        }
         if (isLoginContainer()) {
             props.putString("loginReason", intent.getStringExtra(AuthNavigator.EXTRA_LOGIN_REASON))
         } else {
@@ -455,6 +465,8 @@ class RNContainerActivity : AppCompatActivity(), DefaultHardwareBackBtnHandler {
             channel: String,
             configPath: String? = null,
             fromNative: String = "shell-entry",
+            /** 传入 RN 根组件 initialProps，最终落到首屏 route.params */
+            initialProps: Bundle? = null,
         ): Intent {
             return Intent(context, RNContainerActivity::class.java).apply {
                 putExtra(EXTRA_MODE, MODE_BUNDLE_KEY)
@@ -464,6 +476,17 @@ class RNContainerActivity : AppCompatActivity(), DefaultHardwareBackBtnHandler {
                 putExtra(EXTRA_CHANNEL, channel)
                 putExtra(EXTRA_FROM_NATIVE, fromNative)
                 configPath?.let { putExtra(EXTRA_CONFIG_PATH, it) }
+                val props = Bundle().apply {
+                    putString("fromNative", fromNative)
+                    putString("channel", channel)
+                    if (initialProps != null) {
+                        putAll(initialProps)
+                        // 保证入口元数据不被业务 props 覆盖丢
+                        putString("fromNative", fromNative)
+                        putString("channel", channel)
+                    }
+                }
+                putExtra(EXTRA_PROPS, props)
             }
         }
 
