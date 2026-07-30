@@ -3,9 +3,10 @@ package com.rndynamic.loader
 import android.graphics.Color
 import android.media.MediaPlayer
 import android.net.Uri
+import android.os.Handler
+import android.os.Looper
 import android.view.Gravity
 import android.widget.FrameLayout
-import android.widget.MediaController
 import android.widget.VideoView
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.ReactContext
@@ -21,10 +22,10 @@ import com.facebook.react.uimanager.events.RCTEventEmitter
 /**
  * 宿主页内成片播放器。
  *
- * 策略（对齐 HTML5 video controls 体验）：
- * - 容器尺寸由 JS 固定（小屏友好），不随竖屏片源把区域拉高
- * - VideoView 在容器内按片源比例「等比完整可见」(contain)，两侧/上下可留黑边
- * - 使用系统 MediaController：默认进度条 + 点击播放/暂停
+ * - 容器高度由 JS 固定（小屏友好）
+ * - VideoView 在容器内按片源比例 contain 居中（可留黑边，不拉扁）
+ * - 不用系统 MediaController（会浮在窗口上，ScrollView 滚动时错位）
+ * - 进度由 onProgress 交给 RN 页内一体控件
  */
 class RNMediaPlayerViewManager : SimpleViewManager<RNMediaPlayerView>() {
     override fun getName(): String = REACT_CLASS
@@ -48,12 +49,23 @@ class RNMediaPlayerViewManager : SimpleViewManager<RNMediaPlayerView>() {
         view.setMuted(muted)
     }
 
+    @ReactProp(name = "seekTo", defaultDouble = -1.0)
+    fun setSeekTo(view: RNMediaPlayerView, seconds: Double) {
+        view.setSeekTarget(seconds)
+    }
+
+    @ReactProp(name = "seekNonce", defaultDouble = 0.0)
+    fun setSeekNonce(view: RNMediaPlayerView, nonce: Double) {
+        view.applySeekNonce(nonce)
+    }
+
     override fun getExportedCustomDirectEventTypeConstants(): MutableMap<String, Any>? {
         return HashMap(
             MapBuilder.builder<String, Any>()
                 .put(EVENT_READY, MapBuilder.of("registrationName", "onReady"))
                 .put(EVENT_ERROR, MapBuilder.of("registrationName", "onError"))
                 .put(EVENT_END, MapBuilder.of("registrationName", "onEnd"))
+                .put(EVENT_PROGRESS, MapBuilder.of("registrationName", "onProgress"))
                 .build(),
         )
     }
@@ -63,6 +75,7 @@ class RNMediaPlayerViewManager : SimpleViewManager<RNMediaPlayerView>() {
         const val EVENT_READY = "topReady"
         const val EVENT_ERROR = "topError"
         const val EVENT_END = "topEnd"
+        const val EVENT_PROGRESS = "topProgress"
     }
 }
 
@@ -70,7 +83,6 @@ class RNMediaPlayerView(
     private val reactContext: ThemedReactContext,
 ) : FrameLayout(reactContext) {
     private val videoView = VideoView(reactContext)
-    private val mediaController = MediaController(reactContext)
 
     private var source: String? = null
     private var paused = false
@@ -81,20 +93,26 @@ class RNMediaPlayerView(
     private var readyDispatched = false
     private var videoWidth = 0
     private var videoHeight = 0
+    private var seekTargetSec = -1.0
+    private var lastSeekNonce = -1.0
+
+    private val progressHandler = Handler(Looper.getMainLooper())
+    private val progressTick =
+        object : Runnable {
+            override fun run() {
+                emitProgress()
+                progressHandler.postDelayed(this, 250L)
+            }
+        }
 
     init {
         setBackgroundColor(Color.BLACK)
         clipChildren = true
         videoView.setBackgroundColor(Color.TRANSPARENT)
-        // 先占满，prepared 后按片源比例改成 contain 居中
         addView(
             videoView,
             LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT, Gravity.CENTER),
         )
-
-        mediaController.setMediaPlayer(videoView)
-        mediaController.setAnchorView(this)
-        videoView.setMediaController(mediaController)
 
         videoView.setOnPreparedListener { mp ->
             prepared = true
@@ -113,25 +131,20 @@ class RNMediaPlayerView(
             } catch (_: Exception) {
                 // ignore
             }
-            // 按真实比例重新 layout，避免竖屏片被拉扁
             requestLayout()
             if (!paused) {
                 try {
                     videoView.start()
-                    // 展示系统默认控制条（进度 + 播放/暂停）
-                    mediaController.show(0)
                 } catch (_: Exception) {
                     // ignore
                 }
             }
             dispatchReadyOnce(mp)
+            startProgressTicks()
         }
         videoView.setOnCompletionListener {
-            try {
-                mediaController.show(0)
-            } catch (_: Exception) {
-                // ignore
-            }
+            stopProgressTicks()
+            emitProgress(forceEnded = true)
             dispatch(RNMediaPlayerViewManager.EVENT_END, Arguments.createMap())
         }
         videoView.setOnErrorListener { _, what, extra ->
@@ -140,6 +153,7 @@ class RNMediaPlayerView(
             readyDispatched = false
             videoWidth = 0
             videoHeight = 0
+            stopProgressTicks()
             val map = Arguments.createMap()
             map.putInt("what", what)
             map.putInt("extra", extra)
@@ -155,8 +169,19 @@ class RNMediaPlayerView(
         }
     }
 
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        if (prepared && !paused) {
+            startProgressTicks()
+        }
+    }
+
+    override fun onDetachedFromWindow() {
+        stopProgressTicks()
+        super.onDetachedFromWindow()
+    }
+
     override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
-        // 不走默认把唯一子 View 撑满，手动 contain 居中
         val w = right - left
         val h = bottom - top
         if (w <= 0 || h <= 0) {
@@ -169,9 +194,7 @@ class RNMediaPlayerView(
         }
     }
 
-    /**
-     * 在固定容器内按片源宽高比等比缩小，保证整帧可见（可留黑边）。
-     */
+    /** 固定容器内等比完整可见 */
     private fun layoutVideoContain(containerW: Int, containerH: Int) {
         val vw = videoWidth
         val vh = videoHeight
@@ -207,6 +230,7 @@ class RNMediaPlayerView(
         readyDispatched = false
         videoWidth = 0
         videoHeight = 0
+        stopProgressTicks()
         val uri = Uri.parse(next)
         if (width <= 0 || height <= 0) {
             pendingUri = uri
@@ -238,9 +262,10 @@ class RNMediaPlayerView(
                 if (videoView.isPlaying) {
                     videoView.pause()
                 }
+                emitProgress()
             } else if (prepared) {
                 videoView.start()
-                mediaController.show(0)
+                startProgressTicks()
             }
         } catch (_: Exception) {
             // ignore
@@ -250,6 +275,27 @@ class RNMediaPlayerView(
     fun setMuted(value: Boolean) {
         muted = value
         mediaPlayer?.let { applyMute(it) }
+    }
+
+    fun setSeekTarget(seconds: Double) {
+        seekTargetSec = seconds
+    }
+
+    fun applySeekNonce(nonce: Double) {
+        if (nonce == lastSeekNonce) {
+            return
+        }
+        lastSeekNonce = nonce
+        if (seekTargetSec < 0 || !prepared) {
+            return
+        }
+        try {
+            val ms = (seekTargetSec * 1000.0).toInt().coerceAtLeast(0)
+            videoView.seekTo(ms)
+            emitProgress()
+        } catch (_: Exception) {
+            // ignore
+        }
     }
 
     private fun applyMute(mp: MediaPlayer) {
@@ -277,6 +323,40 @@ class RNMediaPlayerView(
             map.putDouble("duration", 0.0)
         }
         dispatch(RNMediaPlayerViewManager.EVENT_READY, map)
+        emitProgress()
+    }
+
+    private fun startProgressTicks() {
+        progressHandler.removeCallbacks(progressTick)
+        progressHandler.post(progressTick)
+    }
+
+    private fun stopProgressTicks() {
+        progressHandler.removeCallbacks(progressTick)
+    }
+
+    private fun emitProgress(forceEnded: Boolean = false) {
+        if (!prepared && !forceEnded) {
+            return
+        }
+        val map = Arguments.createMap()
+        try {
+            val durationMs = videoView.duration.coerceAtLeast(0)
+            val currentMs =
+                if (forceEnded && durationMs > 0) {
+                    durationMs
+                } else {
+                    videoView.currentPosition.coerceAtLeast(0)
+                }
+            map.putDouble("currentTime", currentMs / 1000.0)
+            map.putDouble("duration", durationMs / 1000.0)
+            map.putBoolean("playing", !paused && videoView.isPlaying)
+        } catch (_: Exception) {
+            map.putDouble("currentTime", 0.0)
+            map.putDouble("duration", 0.0)
+            map.putBoolean("playing", false)
+        }
+        dispatch(RNMediaPlayerViewManager.EVENT_PROGRESS, map)
     }
 
     private fun dispatch(eventName: String, payload: WritableMap) {
@@ -297,7 +377,7 @@ class RNMediaPlayerView(
             ctx.getJSModule(RCTEventEmitter::class.java)
                 .receiveEvent(id, eventName, payload)
         } catch (_: Exception) {
-            // Bridgeless 下偶发 emitter 未就绪
+            // ignore
         }
     }
 
