@@ -2,16 +2,16 @@
   "rnVersion": "0.86.0",
   "baseVersion": "0.1.0",
   "channel": "agent-docx",
-  "updatedAt": "2026-07-30T06:06:50.000Z",
+  "updatedAt": "2026-07-30T07:36:46.000Z",
   "bundles": {
     "common": [
       {
         "key": "common",
         "name": "common",
         "componentName": "common",
-        "url": "embedded://rn-bundles/agent-docx/common/common.android.1d13766ebcbe.bundle",
-        "assetsUrl": "rn-bundles/agent-docx/common/common.android.1d13766ebcbe.bundle",
-        "hash": "1d13766ebcbe",
+        "url": "embedded://rn-bundles/agent-docx/common/common.android.2ef546930f27.bundle",
+        "assetsUrl": "rn-bundles/agent-docx/common/common.android.2ef546930f27.bundle",
+        "hash": "2ef546930f27",
         "platform": "android",
         "kind": "common"
       }
@@ -36,9 +36,9 @@
         "key": "home",
         "name": "Home",
         "componentName": "home",
-        "url": "embedded://rn-bundles/agent-docx/home/home.android.dc1763fc954c.bundle",
-        "assetsUrl": "rn-bundles/agent-docx/home/home.android.dc1763fc954c.bundle",
-        "hash": "dc1763fc954c",
+        "url": "embedded://rn-bundles/agent-docx/home/home.android.b5b8f115d880.bundle",
+        "assetsUrl": "rn-bundles/agent-docx/home/home.android.b5b8f115d880.bundle",
+        "hash": "b5b8f115d880",
         "platform": "android",
         "kind": "page",
         "dependsOn": [
