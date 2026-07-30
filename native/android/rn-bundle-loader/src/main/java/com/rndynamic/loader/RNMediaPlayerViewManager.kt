@@ -60,12 +60,15 @@ class RNMediaPlayerViewManager : SimpleViewManager<RNMediaPlayerView>() {
     }
 
     override fun getExportedCustomDirectEventTypeConstants(): MutableMap<String, Any>? {
-        return MapBuilder.builder<String, Any>()
-            .put(EVENT_READY, MapBuilder.of("registrationName", "onReady"))
-            .put(EVENT_ERROR, MapBuilder.of("registrationName", "onError"))
-            .put(EVENT_END, MapBuilder.of("registrationName", "onEnd"))
-            .put(EVENT_PROGRESS, MapBuilder.of("registrationName", "onProgress"))
-            .build()
+        // MapBuilder.build() 返回不可变 Map，Kotlin 需显式转成 MutableMap
+        return HashMap(
+            MapBuilder.builder<String, Any>()
+                .put(EVENT_READY, MapBuilder.of("registrationName", "onReady"))
+                .put(EVENT_ERROR, MapBuilder.of("registrationName", "onError"))
+                .put(EVENT_END, MapBuilder.of("registrationName", "onEnd"))
+                .put(EVENT_PROGRESS, MapBuilder.of("registrationName", "onProgress"))
+                .build(),
+        )
     }
 
     companion object {
