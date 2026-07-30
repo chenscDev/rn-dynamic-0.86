@@ -2,7 +2,7 @@
   "rnVersion": "0.86.0",
   "baseVersion": "0.1.0",
   "channel": "agent-docx",
-  "updatedAt": "2026-07-30T08:26:54.000Z",
+  "updatedAt": "2026-07-30T08:38:58.000Z",
   "bundles": {
     "common": [
       {
@@ -36,9 +36,9 @@
         "key": "home",
         "name": "Home",
         "componentName": "home",
-        "url": "embedded://rn-bundles/agent-docx/home/home.android.4582dd09cb80.bundle",
-        "assetsUrl": "rn-bundles/agent-docx/home/home.android.4582dd09cb80.bundle",
-        "hash": "4582dd09cb80",
+        "url": "embedded://rn-bundles/agent-docx/home/home.android.c04c86922f37.bundle",
+        "assetsUrl": "rn-bundles/agent-docx/home/home.android.c04c86922f37.bundle",
+        "hash": "c04c86922f37",
         "platform": "android",
         "kind": "page",
         "dependsOn": [
