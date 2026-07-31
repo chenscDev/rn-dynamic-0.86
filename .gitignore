@@ -39,6 +39,10 @@ project/dist/
 *.ipa
 .xcode.env.local
 
+# 本地上传/分包通道配置（可含本机路径或内网 IP，勿提交）
+**/upload.local.json
+**/bundles.local.json
+
 # 日志与系统
 *.log
 .DS_Store
