@@ -23,7 +23,7 @@ import com.facebook.react.uimanager.events.RCTEventEmitter
  * 宿主页内成片播放器。
  *
  * - 容器高度由 JS 固定（小屏友好）
- * - VideoView 铺满容器；由 MediaPlayer SCALE_TO_FIT 做 contain（可留黑边）
+ * - VideoView 铺满容器；SCALE_TO_FIT_WITH_CROPPING 铺满高度（可裁左右）
  * - 切勿在 onLayout 里手动缩小 VideoView：Surface 会被毁掉，表现为黑屏无声
  * - 不用系统 MediaController（会浮在窗口上，ScrollView 滚动时错位）
  * - 进度由 onProgress 交给 RN 页内一体控件
@@ -127,7 +127,7 @@ class RNMediaPlayerView(
             applyMute(mp)
             // 在铺满的 VideoView 内等比完整显示（黑边由容器底色体现）
             try {
-                mp.setVideoScalingMode(MediaPlayer.VIDEO_SCALING_MODE_SCALE_TO_FIT)
+                mp.setVideoScalingMode(MediaPlayer.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING)
             } catch (_: Exception) {
                 // ignore
             }
