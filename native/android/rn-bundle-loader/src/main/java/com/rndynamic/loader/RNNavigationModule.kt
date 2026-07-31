@@ -47,16 +47,11 @@ class RNNavigationModule(
         }
     }
 
-    /** 兼容旧调用：仅 key + title */
-    @ReactMethod
-    fun openBundle(bundleKey: String, title: String?) {
-        openBundle(bundleKey, title, null)
-    }
-
     /**
      * 打开业务 RN 分包，并可带 initialProps（落到首屏 route.params）。
      *
-     * props 仅支持扁平基本类型（string / number / boolean）；大段文案建议仍走 handoff 兜底。
+     * props 可为空；仅支持扁平基本类型（string / number / boolean）。
+     * 注意：TurboModule 不允许同名 @ReactMethod 重载，故只保留三参数签名。
      */
     @ReactMethod
     fun openBundle(bundleKey: String, title: String?, props: ReadableMap?) {
