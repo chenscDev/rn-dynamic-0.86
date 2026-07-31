@@ -46,4 +46,8 @@ subprojects { sub ->
         google()
         mavenCentral()
     }
+    // image-picker 写死 compileSdk 35；对齐宿主，避免本机缺 35 平台包
+    sub.pluginManager.withPlugin('com.android.library') {
+        sub.android.compileSdkVersion rootProject.ext.compileSdkVersion
+    }
 }
