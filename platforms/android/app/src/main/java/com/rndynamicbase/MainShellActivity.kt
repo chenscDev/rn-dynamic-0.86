@@ -15,6 +15,8 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.WindowCompat
 import androidx.fragment.app.Fragment
 import com.facebook.react.modules.core.DefaultHardwareBackBtnHandler
+import com.facebook.react.modules.core.PermissionAwareActivity
+import com.facebook.react.modules.core.PermissionListener
 import com.rndynamic.loader.AuthSession
 import com.rndynamic.loader.RNAssetBundleHelper
 import com.rndynamic.loader.MockApiService
@@ -35,7 +37,8 @@ import kotlin.concurrent.thread
 /**
  * 原生 Shell：Tab / RN 入口优先远程配置，失败回退 assets / Mock
  */
-class MainShellActivity : AppCompatActivity(), DefaultHardwareBackBtnHandler {
+class MainShellActivity : AppCompatActivity(), DefaultHardwareBackBtnHandler, PermissionAwareActivity {
+    private val permissionBridge = com.rndynamic.loader.RNPermissionBridge(this)
     private val containerId = View.generateViewId()
     private var shellConfig: ShellConfigFile? = null
     private var configPath: String? = null
@@ -339,6 +342,36 @@ class MainShellActivity : AppCompatActivity(), DefaultHardwareBackBtnHandler {
 
     private fun dp(value: Int): Int {
         return (value * resources.displayMetrics.density).toInt()
+    }
+
+
+    override fun checkPermission(permission: String, pid: Int, uid: Int): Int {
+        return permissionBridge.checkPermission(permission, pid, uid)
+    }
+
+    override fun checkSelfPermission(permission: String): Int {
+        return permissionBridge.checkSelfPermission(permission)
+    }
+
+    override fun shouldShowRequestPermissionRationale(permission: String): Boolean {
+        return permissionBridge.shouldShowRequestPermissionRationale(permission)
+    }
+
+    override fun requestPermissions(
+        permissions: Array<String>,
+        requestCode: Int,
+        listener: PermissionListener?,
+    ) {
+        permissionBridge.requestPermissions(permissions, requestCode, listener)
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<String>,
+        grantResults: IntArray,
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        permissionBridge.onRequestPermissionsResult(requestCode, permissions, grantResults)
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {

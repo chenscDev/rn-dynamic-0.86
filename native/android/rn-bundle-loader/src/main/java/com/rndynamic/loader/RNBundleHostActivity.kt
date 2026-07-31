@@ -7,13 +7,20 @@ import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
 import java.io.File
 import com.facebook.react.modules.core.DefaultHardwareBackBtnHandler
+import com.facebook.react.modules.core.PermissionAwareActivity
+import com.facebook.react.modules.core.PermissionListener
 import kotlin.concurrent.thread
 
 /**
  * 正式入口：整页打开某个分包（Mode A）
  * 按 dependsOn 先解析 common，再挂载 page。
  */
-class RNBundleHostActivity : AppCompatActivity(), DefaultHardwareBackBtnHandler {
+class RNBundleHostActivity :
+    AppCompatActivity(),
+    DefaultHardwareBackBtnHandler,
+    PermissionAwareActivity {
+    private val permissionBridge = RNPermissionBridge(this)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -122,6 +129,35 @@ class RNBundleHostActivity : AppCompatActivity(), DefaultHardwareBackBtnHandler 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: android.content.Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         RNBundleMount.forwardOnActivityResult(this, requestCode, resultCode, data)
+    }
+
+    override fun checkPermission(permission: String, pid: Int, uid: Int): Int {
+        return permissionBridge.checkPermission(permission, pid, uid)
+    }
+
+    override fun checkSelfPermission(permission: String): Int {
+        return permissionBridge.checkSelfPermission(permission)
+    }
+
+    override fun shouldShowRequestPermissionRationale(permission: String): Boolean {
+        return permissionBridge.shouldShowRequestPermissionRationale(permission)
+    }
+
+    override fun requestPermissions(
+        permissions: Array<String>,
+        requestCode: Int,
+        listener: PermissionListener?,
+    ) {
+        permissionBridge.requestPermissions(permissions, requestCode, listener)
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<String>,
+        grantResults: IntArray,
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        permissionBridge.onRequestPermissionsResult(requestCode, permissions, grantResults)
     }
 
     override fun onDestroy() {
