@@ -11,6 +11,10 @@ final class MainShellViewController: UITabBarController {
   private var tabIds: [String] = []
   private let cache: RNBundleCache
   private var configStore: RNBundleConfigStore?
+  private var chromeStatusBarHidden = false
+  private var chromeStatusBarStyle: UIStatusBarStyle = .darkContent
+  private let chromeTitleBar = UILabel()
+  private var chromeTitleHeightConstraint: NSLayoutConstraint?
 
   init(channel: String = ShellConfigLoader.defaultChannel) {
     self.channel = RNBundleConfigStore.normalizeChannel(channel)
@@ -28,12 +32,37 @@ final class MainShellViewController: UITabBarController {
     fatalError("init(coder:) has not been implemented")
   }
 
+  override var prefersStatusBarHidden: Bool { chromeStatusBarHidden }
+  override var preferredStatusBarStyle: UIStatusBarStyle { chromeStatusBarStyle }
+  // 由 Shell 自身控制状态栏，不被子 VC 覆盖
+  override var childForStatusBarHidden: UIViewController? { nil }
+  override var childForStatusBarStyle: UIViewController? { nil }
+
   override func viewDidLoad() {
     super.viewDidLoad()
     MainShellViewController.shared = self
     view.backgroundColor = .systemBackground
-    tabBar.tintColor = UIColor(red: 0.07, green: 0.07, blue: 0.07, alpha: 1)
-    tabBar.unselectedItemTintColor = UIColor(white: 0.53, alpha: 1)
+    // 选中态：深色 tint；未选中灰色，保证对比明显
+    tabBar.tintColor = UIColor(red: 0.06, green: 0.09, blue: 0.16, alpha: 1)
+    tabBar.unselectedItemTintColor = UIColor(red: 0.58, green: 0.64, blue: 0.72, alpha: 1)
+    if #available(iOS 15.0, *) {
+      let appearance = UITabBarAppearance()
+      appearance.configureWithOpaqueBackground()
+      appearance.backgroundColor = .white
+      appearance.stackedLayoutAppearance.selected.iconColor = tabBar.tintColor
+      appearance.stackedLayoutAppearance.selected.titleTextAttributes = [
+        .foregroundColor: tabBar.tintColor as Any,
+        .font: UIFont.systemFont(ofSize: 11, weight: .semibold),
+      ]
+      appearance.stackedLayoutAppearance.normal.iconColor = tabBar.unselectedItemTintColor
+      appearance.stackedLayoutAppearance.normal.titleTextAttributes = [
+        .foregroundColor: tabBar.unselectedItemTintColor as Any,
+        .font: UIFont.systemFont(ofSize: 11, weight: .regular),
+      ]
+      tabBar.standardAppearance = appearance
+      tabBar.scrollEdgeAppearance = appearance
+    }
+    setupChromeTitleBar()
     bootstrap()
   }
 
@@ -50,6 +79,72 @@ final class MainShellViewController: UITabBarController {
     // 同步调整内容 insets，避免隐藏后仍留白
     additionalSafeAreaInsets.bottom = visible ? 0 : 0
     view.setNeedsLayout()
+  }
+
+  /// RN 桥：原生标题栏
+  func applyNativeTitle(
+    title: String? = nil,
+    backgroundColor: UIColor? = nil,
+    textColor: UIColor? = nil,
+    visible: Bool? = nil
+  ) {
+    if let title {
+      chromeTitleBar.text = title
+    }
+    if let backgroundColor {
+      chromeTitleBar.backgroundColor = backgroundColor
+    }
+    if let textColor {
+      chromeTitleBar.textColor = textColor
+    }
+    let show: Bool
+    if let visible {
+      show = visible
+    } else if let title, !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+      show = true
+    } else {
+      return
+    }
+    chromeTitleBar.isHidden = !show
+    chromeTitleHeightConstraint?.constant = show ? 44 : 0
+    additionalSafeAreaInsets.top = show ? 44 : 0
+    view.layoutIfNeeded()
+  }
+
+  /// RN 桥：状态栏
+  func applyStatusBarChrome(
+    visible: Bool? = nil,
+    backgroundColor: UIColor? = nil,
+    lightContent: Bool? = nil
+  ) {
+    if let visible {
+      chromeStatusBarHidden = !visible
+    }
+    if let lightContent {
+      chromeStatusBarStyle = lightContent ? .lightContent : .darkContent
+    }
+    if let backgroundColor {
+      view.backgroundColor = backgroundColor
+    }
+    setNeedsStatusBarAppearanceUpdate()
+  }
+
+  private func setupChromeTitleBar() {
+    chromeTitleBar.translatesAutoresizingMaskIntoConstraints = false
+    chromeTitleBar.textAlignment = .center
+    chromeTitleBar.font = .systemFont(ofSize: 17, weight: .semibold)
+    chromeTitleBar.textColor = UIColor(red: 0.07, green: 0.07, blue: 0.07, alpha: 1)
+    chromeTitleBar.backgroundColor = .white
+    chromeTitleBar.isHidden = true
+    view.addSubview(chromeTitleBar)
+    let height = chromeTitleBar.heightAnchor.constraint(equalToConstant: 0)
+    chromeTitleHeightConstraint = height
+    NSLayoutConstraint.activate([
+      chromeTitleBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+      chromeTitleBar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+      chromeTitleBar.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+      height,
+    ])
   }
 
   private func bootstrap() {
@@ -83,10 +178,11 @@ final class MainShellViewController: UITabBarController {
           ])
           vc = placeholder
         }
+        let symbol = UIImage(systemName: symbolName(for: tab.id))
         vc.tabBarItem = UITabBarItem(
           title: tab.title,
-          image: UIImage(systemName: symbolName(for: tab.id)),
-          selectedImage: nil
+          image: symbol?.withRenderingMode(.alwaysTemplate),
+          selectedImage: symbol?.withRenderingMode(.alwaysTemplate)
         )
         controllers.append(vc)
         ids.append(tab.id)
@@ -97,6 +193,8 @@ final class MainShellViewController: UITabBarController {
       if !controllers.isEmpty {
         selectedIndex = 0
       }
+      // 标题栏保持在最上层，避免被 Tab 内容盖住
+      view.bringSubviewToFront(chromeTitleBar)
     } catch {
       presentFatal("Shell 启动失败", error.localizedDescription)
     }

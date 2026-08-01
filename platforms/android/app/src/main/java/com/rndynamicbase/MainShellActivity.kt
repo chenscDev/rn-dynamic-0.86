@@ -1,6 +1,8 @@
 package com.rndynamicbase
 
 import android.content.Intent
+import android.graphics.Color
+import android.graphics.PorterDuff
 import android.graphics.Typeface
 import android.os.Bundle
 import android.view.Gravity
@@ -18,8 +20,9 @@ import com.facebook.react.modules.core.DefaultHardwareBackBtnHandler
 import com.facebook.react.modules.core.PermissionAwareActivity
 import com.facebook.react.modules.core.PermissionListener
 import com.rndynamic.loader.AuthSession
-import com.rndynamic.loader.RNAssetBundleHelper
 import com.rndynamic.loader.MockApiService
+import com.rndynamic.loader.NativeChromeHelper
+import com.rndynamic.loader.RNAssetBundleHelper
 import com.rndynamic.loader.RNBundleMount
 import com.rndynamic.loader.RNBundleRemoteSettingsStore
 import com.rndynamic.loader.RNBundleWarmup
@@ -46,6 +49,7 @@ class MainShellActivity : AppCompatActivity(), DefaultHardwareBackBtnHandler, Pe
     private var currentTabId: String? = null
     private lateinit var buildChannel: String
     private lateinit var bottomBar: LinearLayout
+    private lateinit var titleBar: TextView
     private lateinit var fragmentContainer: FrameLayout
     private lateinit var loadingView: View
 
@@ -59,11 +63,21 @@ class MainShellActivity : AppCompatActivity(), DefaultHardwareBackBtnHandler, Pe
         configPath = File(filesDir, "rn-config").absolutePath
 
         fragmentContainer = FrameLayout(this).apply { id = containerId }
+        // 原生标题栏：默认隐藏，由 RN setChrome / setNativeTitle 控制
+        titleBar = TextView(this).apply {
+            textSize = 17f
+            gravity = Gravity.CENTER
+            setTypeface(typeface, Typeface.BOLD)
+            setTextColor(0xFF111111.toInt())
+            setBackgroundColor(0xFFFFFFFF.toInt())
+            setPadding(dp(16), dp(12), dp(16), dp(12))
+            visibility = View.GONE
+        }
         bottomBar = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             setBackgroundColor(0xFFFFFFFF.toInt())
             elevation = dp(4).toFloat()
-            setPadding(0, dp(8), 0, dp(8))
+            setPadding(0, dp(4), 0, dp(4))
             visibility = View.GONE
         }
         loadingView = LinearLayout(this).apply {
@@ -99,6 +113,13 @@ class MainShellActivity : AppCompatActivity(), DefaultHardwareBackBtnHandler, Pe
             addView(
                 LinearLayout(context).apply {
                     orientation = LinearLayout.VERTICAL
+                    addView(
+                        titleBar,
+                        LinearLayout.LayoutParams(
+                            LinearLayout.LayoutParams.MATCH_PARENT,
+                            LinearLayout.LayoutParams.WRAP_CONTENT,
+                        ),
+                    )
                     addView(
                         fragmentContainer,
                         LinearLayout.LayoutParams(
@@ -230,6 +251,7 @@ class MainShellActivity : AppCompatActivity(), DefaultHardwareBackBtnHandler, Pe
     private fun createTabButton(tab: ShellTabConfig): LinearLayout {
         val iconView = ImageView(this).apply {
             layoutParams = LinearLayout.LayoutParams(dp(22), dp(22))
+            tag = "tab_icon"
         }
         ShellIconLoader.loadInto(
             this,
@@ -239,16 +261,27 @@ class MainShellActivity : AppCompatActivity(), DefaultHardwareBackBtnHandler, Pe
         )
         val label = TextView(this).apply {
             text = tab.title
-            textSize = 12f
+            textSize = 11f
             gravity = Gravity.CENTER
             setPadding(0, dp(4), 0, 0)
+            tag = "tab_label"
+        }
+        // 选中底部分割指示条
+        val indicator = View(this).apply {
+            layoutParams = LinearLayout.LayoutParams(dp(18), dp(3)).apply {
+                topMargin = dp(4)
+                gravity = Gravity.CENTER_HORIZONTAL
+            }
+            setBackgroundColor(Color.TRANSPARENT)
+            tag = "tab_indicator"
         }
         return LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
-            setPadding(0, dp(8), 0, dp(8))
+            setPadding(0, dp(8), 0, dp(6))
             addView(iconView)
             addView(label)
+            addView(indicator)
             setOnClickListener { switchTab(tab.id) }
         }
     }
@@ -278,14 +311,72 @@ class MainShellActivity : AppCompatActivity(), DefaultHardwareBackBtnHandler, Pe
         bottomBar.visibility = if (visible) View.VISIBLE else View.GONE
     }
 
+    /**
+     * 原生标题栏：文案 / 背景色 / 文字色 / 显隐
+     * title 为 null 时仅改颜色与显隐；空串视为隐藏标题文案但仍可保留栏位（由 titleVisible 控制）
+     */
+    fun applyNativeTitle(
+        title: String? = null,
+        backgroundColor: Int? = null,
+        textColor: Int? = null,
+        visible: Boolean? = null,
+    ) {
+        if (!::titleBar.isInitialized) {
+            return
+        }
+        if (title != null) {
+            titleBar.text = title
+        }
+        if (backgroundColor != null) {
+            titleBar.setBackgroundColor(backgroundColor)
+        }
+        if (textColor != null) {
+            titleBar.setTextColor(textColor)
+        }
+        if (visible != null) {
+            titleBar.visibility = if (visible) View.VISIBLE else View.GONE
+        } else if (title != null && title.isNotBlank()) {
+            // 传入非空标题时默认显示
+            titleBar.visibility = View.VISIBLE
+        }
+    }
+
+    /** 状态栏显隐 / 颜色（委托 NativeChromeHelper） */
+    fun applyStatusBarChrome(
+        visible: Boolean? = null,
+        backgroundColor: Int? = null,
+        lightContent: Boolean? = null,
+    ) {
+        NativeChromeHelper.applyStatusBar(
+            activity = this,
+            visible = visible,
+            backgroundColor = backgroundColor,
+            lightContent = lightContent,
+        )
+    }
+
     private fun updateTabStyles(selectedId: String) {
-        val selectedColor = 0xFF111111.toInt()
-        val normalColor = 0xFF888888.toInt()
+        val selectedColor = 0xFF0F172A.toInt()
+        val normalColor = 0xFF94A3B8.toInt()
+        val accentColor = 0xFFFE2C55.toInt()
         tabButtons.forEach { (id, layout) ->
-            val label = layout.getChildAt(1) as TextView
             val selected = id == selectedId
-            label.setTextColor(if (selected) selectedColor else normalColor)
-            label.setTypeface(null, if (selected) Typeface.BOLD else Typeface.NORMAL)
+            val iconView = layout.findViewWithTag<ImageView>("tab_icon")
+            val label = layout.findViewWithTag<TextView>("tab_label")
+            val indicator = layout.findViewWithTag<View>("tab_indicator")
+            label?.setTextColor(if (selected) selectedColor else normalColor)
+            label?.setTypeface(null, if (selected) Typeface.BOLD else Typeface.NORMAL)
+            label?.textSize = if (selected) 12f else 11f
+            iconView?.setColorFilter(
+                if (selected) selectedColor else normalColor,
+                PorterDuff.Mode.SRC_IN,
+            )
+            indicator?.setBackgroundColor(if (selected) accentColor else Color.TRANSPARENT)
+            layout.alpha = if (selected) 1f else 0.78f
+            layout.isSelected = selected
+            // 选中项轻微抬高，未选中更淡，保证点击反馈可见
+            layout.scaleX = if (selected) 1.04f else 1f
+            layout.scaleY = if (selected) 1.04f else 1f
         }
     }
 

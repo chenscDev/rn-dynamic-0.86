@@ -22,7 +22,14 @@ object ShellIconLoader {
                     val bytes = URL(icon).openStream().use { it.readBytes() }
                     val bitmap = android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
                     if (bitmap != null) {
-                        target.post { target.setImageBitmap(bitmap) }
+                        target.post {
+                            // setImageBitmap 会清掉 ColorFilter，先保留再恢复（Tab 选中态着色）
+                            val filter = target.colorFilter
+                            target.setImageBitmap(bitmap)
+                            if (filter != null) {
+                                target.colorFilter = filter
+                            }
+                        }
                     }
                 } catch (_: Exception) {
                     // 保持 fallback

@@ -22,6 +22,101 @@ final class RNNavigationModule: NSObject {
     }
   }
 
+  @objc func setStatusBarVisible(_ visible: Bool) {
+    DispatchQueue.main.async {
+      MainShellViewController.shared?.applyStatusBarChrome(visible: visible)
+    }
+  }
+
+  @objc func setStatusBarStyle(_ backgroundColor: String?, lightContent: Bool) {
+    DispatchQueue.main.async {
+      MainShellViewController.shared?.applyStatusBarChrome(
+        backgroundColor: Self.parseColor(backgroundColor),
+        lightContent: lightContent
+      )
+    }
+  }
+
+  @objc func setNativeTitle(_ title: String?, backgroundColor: String?, textColor: String?) {
+    DispatchQueue.main.async {
+      MainShellViewController.shared?.applyNativeTitle(
+        title: title,
+        backgroundColor: Self.parseColor(backgroundColor),
+        textColor: Self.parseColor(textColor),
+        visible: (title?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false) ? true : nil
+      )
+    }
+  }
+
+  @objc func setNativeTitleVisible(_ visible: Bool) {
+    DispatchQueue.main.async {
+      MainShellViewController.shared?.applyNativeTitle(visible: visible)
+    }
+  }
+
+  /// 一次性配置原生 Chrome（推荐）
+  @objc func setChrome(_ options: NSDictionary?) {
+    guard let options else { return }
+    DispatchQueue.main.async {
+      let shell = MainShellViewController.shared
+      if let tabVisible = options["tabBarVisible"] as? Bool {
+        shell?.setTabBarVisible(tabVisible)
+      }
+      if let titleVisible = options["titleVisible"] as? Bool {
+        shell?.applyNativeTitle(visible: titleVisible)
+      }
+      let title = options["title"] as? String
+      let titleBg = Self.parseColor(options["titleBackgroundColor"] as? String)
+      let titleFg = Self.parseColor(options["titleTextColor"] as? String)
+      if title != nil || titleBg != nil || titleFg != nil {
+        shell?.applyNativeTitle(
+          title: title,
+          backgroundColor: titleBg,
+          textColor: titleFg,
+          visible: (options["titleVisible"] as? Bool)
+            ?? ((title?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false) ? true : nil)
+        )
+      }
+      let statusVisible = options["statusBarVisible"] as? Bool
+      let statusBg = Self.parseColor(options["statusBarBackgroundColor"] as? String)
+      let lightContent = options["statusBarLightContent"] as? Bool
+      if statusVisible != nil || statusBg != nil || lightContent != nil {
+        shell?.applyStatusBarChrome(
+          visible: statusVisible,
+          backgroundColor: statusBg,
+          lightContent: lightContent
+        )
+      }
+    }
+  }
+
+  private static func parseColor(_ raw: String?) -> UIColor? {
+    guard var s = raw?.trimmingCharacters(in: .whitespacesAndNewlines), !s.isEmpty else {
+      return nil
+    }
+    if s.hasPrefix("#") { s.removeFirst() }
+    var value: UInt64 = 0
+    guard Scanner(string: s).scanHexInt64(&value) else { return nil }
+    switch s.count {
+    case 6:
+      return UIColor(
+        red: CGFloat((value >> 16) & 0xFF) / 255,
+        green: CGFloat((value >> 8) & 0xFF) / 255,
+        blue: CGFloat(value & 0xFF) / 255,
+        alpha: 1
+      )
+    case 8:
+      return UIColor(
+        red: CGFloat((value >> 16) & 0xFF) / 255,
+        green: CGFloat((value >> 8) & 0xFF) / 255,
+        blue: CGFloat(value & 0xFF) / 255,
+        alpha: CGFloat((value >> 24) & 0xFF) / 255
+      )
+    default:
+      return nil
+    }
+  }
+
   @objc func finishContainer() {
     DispatchQueue.main.async {
       guard let top = Self.topViewController() else { return }
