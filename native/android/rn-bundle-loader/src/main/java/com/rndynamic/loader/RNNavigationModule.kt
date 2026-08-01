@@ -48,6 +48,18 @@ class RNNavigationModule(
     }
 
     /**
+     * 显示/隐藏底部原生 Tab（全屏发布页用）。
+     */
+    @ReactMethod
+    fun setTabBarVisible(visible: Boolean) {
+        val activity = reactContext.currentActivity ?: return
+        activity.runOnUiThread {
+            val shell = activity as? MainShellActivity ?: return@runOnUiThread
+            shell.setBottomBarVisible(visible)
+        }
+    }
+
+    /**
      * 打开业务 RN 分包，并可带 initialProps（落到首屏 route.params）。
      *
      * props 可为空；仅支持扁平基本类型（string / number / boolean）。

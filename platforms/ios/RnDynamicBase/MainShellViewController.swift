@@ -44,6 +44,14 @@ final class MainShellViewController: UITabBarController {
     selectedIndex = idx
   }
 
+  /// RN 桥：全屏页隐藏/恢复底部 Tab
+  func setTabBarVisible(_ visible: Bool) {
+    tabBar.isHidden = !visible
+    // 同步调整内容 insets，避免隐藏后仍留白
+    additionalSafeAreaInsets.bottom = visible ? 0 : 0
+    view.setNeedsLayout()
+  }
+
   private func bootstrap() {
     do {
       let shell = try ShellConfigLoader.loadShell(channel: channel)

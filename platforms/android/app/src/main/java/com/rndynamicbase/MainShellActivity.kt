@@ -270,6 +270,14 @@ class MainShellActivity : AppCompatActivity(), DefaultHardwareBackBtnHandler, Pe
         switchTab(tabId)
     }
 
+    /** 供全屏页隐藏/恢复底部原生 Tab */
+    fun setBottomBarVisible(visible: Boolean) {
+        if (!::bottomBar.isInitialized) {
+            return
+        }
+        bottomBar.visibility = if (visible) View.VISIBLE else View.GONE
+    }
+
     private fun updateTabStyles(selectedId: String) {
         val selectedColor = 0xFF111111.toInt()
         val normalColor = 0xFF888888.toInt()

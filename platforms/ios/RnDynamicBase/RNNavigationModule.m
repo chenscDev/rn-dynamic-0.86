@@ -6,6 +6,7 @@
 @interface RCT_EXTERN_MODULE(RNNavigationModule, NSObject)
 
 RCT_EXTERN_METHOD(switchTab:(NSString *)tabId)
+RCT_EXTERN_METHOD(setTabBarVisible:(BOOL)visible)
 RCT_EXTERN_METHOD(finishContainer)
 RCT_EXTERN_METHOD(openBundle:(NSString *)bundleKey
                   title:(NSString *)title

@@ -16,6 +16,12 @@ final class RNNavigationModule: NSObject {
     }
   }
 
+  @objc func setTabBarVisible(_ visible: Bool) {
+    DispatchQueue.main.async {
+      MainShellViewController.shared?.setTabBarVisible(visible)
+    }
+  }
+
   @objc func finishContainer() {
     DispatchQueue.main.async {
       guard let top = Self.topViewController() else { return }
