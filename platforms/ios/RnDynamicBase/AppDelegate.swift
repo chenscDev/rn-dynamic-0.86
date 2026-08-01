@@ -7,6 +7,7 @@ import ReactAppDependencyProvider
 class AppDelegate: UIResponder, UIApplicationDelegate {
   var window: UIWindow?
 
+  /// 保留 RN Factory，供调试入口 / 未来扩展复用依赖注入
   var reactNativeDelegate: ReactNativeDelegate?
   var reactNativeFactory: RCTReactNativeFactory?
 
@@ -17,18 +18,14 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     let delegate = ReactNativeDelegate()
     let factory = RCTReactNativeFactory(delegate: delegate)
     delegate.dependencyProvider = RCTAppDependencyProvider()
-
     reactNativeDelegate = delegate
     reactNativeFactory = factory
 
     window = UIWindow(frame: UIScreen.main.bounds)
-
-    factory.startReactNative(
-      withModuleName: "RnDynamicBase",
-      in: window,
-      launchOptions: launchOptions
-    )
-
+    // 内测壳：原生 Tab（首页 / 问答 / 我的），不再整页加载宿主 index 包
+    let shell = MainShellViewController(channel: ShellConfigLoader.defaultChannel)
+    window?.rootViewController = shell
+    window?.makeKeyAndVisible()
     return true
   }
 }

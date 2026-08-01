@@ -28,12 +28,29 @@
 	<true/>
 	<key>NSAppTransportSecurity</key>
 	<dict>
-	  <!-- Do not change NSAllowsArbitraryLoads to true, or you will risk app rejection! -->
 		<key>NSAllowsArbitraryLoads</key>
 		<false/>
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
+		<key>NSExceptionDomains</key>
+		<dict>
+			<key>47.93.207.70</key>
+			<dict>
+				<key>NSExceptionAllowsInsecureHTTPLoads</key>
+				<true/>
+				<key>NSIncludesSubdomains</key>
+				<true/>
+			</dict>
+		</dict>
 	</dict>
+	<key>NSCameraUsageDescription</key>
+	<string>用于拍摄短视频素材与证件/文档拍照上传</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>用于录制短视频口播与随拍素材</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>用于选择相册图片/视频作为创作素材</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>用于将成片保存到相册</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string></string>
 	<key>UILaunchStoryboardName</key>

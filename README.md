@@ -339,7 +339,7 @@ yarn prepare   # hooks 未生效时
 | 拆包工具链 `rn-pack` | ✅ 本地 build / upload / publish |
 | 配置协议 + channel | ✅ schema 与示例配置 |
 | Android 原生 SDK + 混合壳 | ✅ 内测可用 |
-| iOS 原生 SDK | ⚠️ 架构对齐，需实机回归 |
+| iOS 原生 SDK + 内测壳 | ⚠️ Tab 壳 / 导航桥已接入，需模拟器或实机回归 |
 | 真实 CDN 上传 | ⚠️ `uploadWithCdn` 待实现 |
 | 远程配置中心 / 灰度熔断 | ❌ 待建设 |
 
@@ -353,4 +353,4 @@ yarn prepare   # hooks 未生效时
 - 远程分包配置后台（灰度、回滚 UI）
 - 正式 `prod` flavor 隐藏 RN 调试入口
 - `minBaseVersion` 运行时强制校验
-- iOS 内测壳与 Android 对齐（原生 Tab + 调试入口）
+- iOS：原生播放器、CDN 仅 iOS 配置刷新、TestFlight 分发文档

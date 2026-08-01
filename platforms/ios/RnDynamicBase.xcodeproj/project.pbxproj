@@ -11,6 +11,18 @@
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
 		761780ED2CA45674006654EE /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 761780EC2CA45674006654EE /* AppDelegate.swift */; };
 		81AB9BB82411601600AC10FF /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */; };
+		A10200000000000000000001 /* MainShellViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10100000000000000000001 /* MainShellViewController.swift */; };
+		A10200000000000000000002 /* MineViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10100000000000000000002 /* MineViewController.swift */; };
+		A10200000000000000000003 /* ShellConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10100000000000000000003 /* ShellConfig.swift */; };
+		A10200000000000000000004 /* RNNavigationModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10100000000000000000004 /* RNNavigationModule.swift */; };
+		A10200000000000000000005 /* RNNavigationModule.m in Sources */ = {isa = PBXBuildFile; fileRef = A10100000000000000000005 /* RNNavigationModule.m */; };
+		A10200000000000000000010 /* RNBundleCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10100000000000000000010 /* RNBundleCache.swift */; };
+		A10200000000000000000011 /* RNBundleConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10100000000000000000011 /* RNBundleConfig.swift */; };
+		A10200000000000000000012 /* RNBundleMount.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10100000000000000000012 /* RNBundleMount.swift */; };
+		A10200000000000000000013 /* RNBundleHostViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10100000000000000000013 /* RNBundleHostViewController.swift */; };
+		A10200000000000000000014 /* RNDebugEntryViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10100000000000000000014 /* RNDebugEntryViewController.swift */; };
+		A10200000000000000000015 /* RNBundleRemoteConfigStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10100000000000000000015 /* RNBundleRemoteConfigStore.swift */; };
+		A10200000000000000000020 /* rn-config in Resources */ = {isa = PBXBuildFile; fileRef = A10100000000000000000020 /* rn-config */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -24,6 +36,18 @@
 		761780EC2CA45674006654EE /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = RnDynamicBase/AppDelegate.swift; sourceTree = "<group>"; };
 		81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = LaunchScreen.storyboard; path = RnDynamicBase/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
+		A10100000000000000000001 /* MainShellViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MainShellViewController.swift; path = RnDynamicBase/MainShellViewController.swift; sourceTree = "<group>"; };
+		A10100000000000000000002 /* MineViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MineViewController.swift; path = RnDynamicBase/MineViewController.swift; sourceTree = "<group>"; };
+		A10100000000000000000003 /* ShellConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ShellConfig.swift; path = RnDynamicBase/ShellConfig.swift; sourceTree = "<group>"; };
+		A10100000000000000000004 /* RNNavigationModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = RNNavigationModule.swift; path = RnDynamicBase/RNNavigationModule.swift; sourceTree = "<group>"; };
+		A10100000000000000000005 /* RNNavigationModule.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = RNNavigationModule.m; path = RnDynamicBase/RNNavigationModule.m; sourceTree = "<group>"; };
+		A10100000000000000000010 /* RNBundleCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = RNBundleCache.swift; path = ../../native/ios/RNBundleLoader/Sources/RNBundleCache.swift; sourceTree = "<group>"; };
+		A10100000000000000000011 /* RNBundleConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = RNBundleConfig.swift; path = ../../native/ios/RNBundleLoader/Sources/RNBundleConfig.swift; sourceTree = "<group>"; };
+		A10100000000000000000012 /* RNBundleMount.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = RNBundleMount.swift; path = ../../native/ios/RNBundleLoader/Sources/RNBundleMount.swift; sourceTree = "<group>"; };
+		A10100000000000000000013 /* RNBundleHostViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = RNBundleHostViewController.swift; path = ../../native/ios/RNBundleLoader/Sources/RNBundleHostViewController.swift; sourceTree = "<group>"; };
+		A10100000000000000000014 /* RNDebugEntryViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = RNDebugEntryViewController.swift; path = ../../native/ios/RNBundleLoader/Sources/RNDebugEntryViewController.swift; sourceTree = "<group>"; };
+		A10100000000000000000015 /* RNBundleRemoteConfigStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = RNBundleRemoteConfigStore.swift; path = ../../native/ios/RNBundleLoader/Sources/RNBundleRemoteConfigStore.swift; sourceTree = "<group>"; };
+		A10100000000000000000020 /* rn-config */ = {isa = PBXFileReference; lastKnownFileType = folder; name = rn-config; path = RnDynamicBase/rn-config; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -43,6 +67,18 @@
 			children = (
 				13B07FB51A68108700A75B9A /* Images.xcassets */,
 				761780EC2CA45674006654EE /* AppDelegate.swift */,
+				A10100000000000000000001 /* MainShellViewController.swift */,
+				A10100000000000000000002 /* MineViewController.swift */,
+				A10100000000000000000003 /* ShellConfig.swift */,
+				A10100000000000000000004 /* RNNavigationModule.swift */,
+				A10100000000000000000005 /* RNNavigationModule.m */,
+				A10100000000000000000010 /* RNBundleCache.swift */,
+				A10100000000000000000011 /* RNBundleConfig.swift */,
+				A10100000000000000000012 /* RNBundleMount.swift */,
+				A10100000000000000000013 /* RNBundleHostViewController.swift */,
+				A10100000000000000000014 /* RNDebugEntryViewController.swift */,
+				A10100000000000000000015 /* RNBundleRemoteConfigStore.swift */,
+				A10100000000000000000020 /* rn-config */,
 				13B07FB61A68108700A75B9A /* Info.plist */,
 				81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */,
 				13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */,
@@ -159,6 +195,7 @@
 			files = (
 				81AB9BB82411601600AC10FF /* LaunchScreen.storyboard in Resources */,
 				13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */,
+				A10200000000000000000020 /* rn-config in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -245,6 +282,17 @@
 			buildActionMask = 2147483647;
 			files = (
 				761780ED2CA45674006654EE /* AppDelegate.swift in Sources */,
+				A10200000000000000000001 /* MainShellViewController.swift in Sources */,
+				A10200000000000000000002 /* MineViewController.swift in Sources */,
+				A10200000000000000000003 /* ShellConfig.swift in Sources */,
+				A10200000000000000000004 /* RNNavigationModule.swift in Sources */,
+				A10200000000000000000005 /* RNNavigationModule.m in Sources */,
+				A10200000000000000000010 /* RNBundleCache.swift in Sources */,
+				A10200000000000000000011 /* RNBundleConfig.swift in Sources */,
+				A10200000000000000000012 /* RNBundleMount.swift in Sources */,
+				A10200000000000000000013 /* RNBundleHostViewController.swift in Sources */,
+				A10200000000000000000014 /* RNDebugEntryViewController.swift in Sources */,
+				A10200000000000000000015 /* RNBundleRemoteConfigStore.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -258,6 +306,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
 				CURRENT_PROJECT_VERSION = 1;
+				DEFINES_MODULE = YES;
 				ENABLE_BITCODE = NO;
 				INFOPLIST_FILE = RnDynamicBase/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.1;

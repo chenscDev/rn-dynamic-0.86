@@ -53,8 +53,8 @@ public final class RNDebugEntryViewController: UIViewController {
         keyField.borderStyle = .roundedRect
         keyField.autocapitalizationType = .none
 
-        channelField.placeholder = "channel（分支，如 order-main）"
-        channelField.text = "main"
+        channelField.placeholder = "channel（分支，如 agent-docx）"
+        channelField.text = "agent-docx"
         channelField.borderStyle = .roundedRect
         channelField.autocapitalizationType = .none
         channelField.autocorrectionType = .no

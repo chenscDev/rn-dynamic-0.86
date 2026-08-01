@@ -1,0 +1,34 @@
+{
+  "rnVersion": "0.86.0",
+  "channel": "agent-docx",
+  "updatedAt": "2026-08-01T04:00:00.000Z",
+  "tabs": [
+    {
+      "id": "home",
+      "title": "首页",
+      "type": "rn-root",
+      "bundleKey": "home",
+      "icon": "ic_tab_home",
+      "visible": true,
+      "order": 0
+    },
+    {
+      "id": "chat",
+      "title": "问答",
+      "type": "rn-root",
+      "bundleKey": "docs-agent",
+      "icon": "ic_tab_chat",
+      "visible": true,
+      "order": 1
+    },
+    {
+      "id": "mine",
+      "title": "我的",
+      "type": "native",
+      "nativeKey": "mine",
+      "icon": "ic_tab_mine",
+      "visible": true,
+      "order": 99
+    }
+  ]
+}
