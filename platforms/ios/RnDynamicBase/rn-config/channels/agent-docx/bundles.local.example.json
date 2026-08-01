@@ -1,0 +1,52 @@
+{
+  "rnVersion": "0.86.0",
+  "baseVersion": "0.1.0",
+  "channel": "agent-docx",
+  "updatedAt": "2026-08-01T04:00:00.000Z",
+  "bundles": {
+    "common": [
+      {
+        "key": "common",
+        "name": "common",
+        "componentName": "common",
+        "url": "http://47.93.207.70/cdn/rn/0.86.0/agent-docx/common/ios/common.ios.8fc04acc3923.bundle",
+        "hash": "8fc04acc3923",
+        "platform": "ios",
+        "channel": "agent-docx",
+        "kind": "common"
+      }
+    ],
+    "home": [
+      {
+        "key": "home",
+        "name": "home",
+        "componentName": "home",
+        "url": "http://47.93.207.70/cdn/rn/0.86.0/agent-docx/home/ios/home.ios.4cc95a561650.bundle",
+        "hash": "4cc95a561650",
+        "platform": "ios",
+        "channel": "agent-docx",
+        "kind": "page",
+        "dependsOn": [
+          "common"
+        ],
+        "assetsUrl": "http://47.93.207.70/cdn/rn/0.86.0/agent-docx/home/ios/assets"
+      }
+    ],
+    "docs-agent": [
+      {
+        "key": "docs-agent",
+        "name": "docs-agent",
+        "componentName": "docs-agent",
+        "url": "http://47.93.207.70/cdn/rn/0.86.0/agent-docx/docs-agent/ios/docs-agent.ios.f6a4899b891f.bundle",
+        "hash": "f6a4899b891f",
+        "platform": "ios",
+        "channel": "agent-docx",
+        "kind": "page",
+        "dependsOn": [
+          "common"
+        ],
+        "assetsUrl": "http://47.93.207.70/cdn/rn/0.86.0/agent-docx/docs-agent/ios/assets"
+      }
+    ]
+  }
+}

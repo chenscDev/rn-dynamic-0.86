@@ -15,7 +15,8 @@ yarn pack:publish docs-agent --platform ios --channel agent-docx
 
 2. 更新宿主内置配置（可选）：把 `project/config/channels/agent-docx/bundles.local.json` 中 **platform=ios** 条目同步到  
    `platforms/ios/RnDynamicBase/rn-config/channels/agent-docx/bundles.local.json`  
-   （模拟器可先用 `file://` 本地 dist；真机请用 CDN `http://…/cdn/rn/.../ios/...`）。
+   可先复制同目录 `bundles.local.example.json` 为 `bundles.local.json`（已被 gitignore）。
+   （模拟器可改成 `file://` 本地 dist；真机请用 CDN `http://…/cdn/rn/.../ios/...`）。
 
 3. 打开工程并安装 Pods：
 
