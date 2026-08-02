@@ -78,14 +78,15 @@ final class MainShellViewController: UITabBarController, UITabBarControllerDeleg
 
   /// RN 桥：全屏页隐藏/恢复底部 Tab
   func setTabBarVisible(_ visible: Bool) {
-    tabBar.isHidden = !visible
-    // 隐藏时扣掉 Tab 高度，避免底部留白；显示时清零
-    if visible {
-      additionalSafeAreaInsets.bottom = 0
-    } else {
-      additionalSafeAreaInsets.bottom = -tabBar.bounds.height
+    let hide = !visible
+    guard tabBar.isHidden != hide else {
+      return
     }
+    tabBar.isHidden = hide
+    // 系统会在 isHidden 后重新布局；清零额外 bottom，避免负 inset 把内容顶飞
+    additionalSafeAreaInsets.bottom = 0
     view.setNeedsLayout()
+    view.layoutIfNeeded()
   }
 
   func tabBarController(_ tabBarController: UITabBarController, didSelect viewController: UIViewController) {
