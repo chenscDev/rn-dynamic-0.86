@@ -227,8 +227,12 @@ class RNNavigationModule(
         val initialProps = readableMapToStringBundle(props)
         activity.runOnUiThread {
             try {
-                // 从问答 Tab 一键出片时，记住回到聊天
-                AuthNavigator.saveResumeFromShell("chat")
+                // 记住当前 Shell Tab，登录后回到来源而非写死 chat
+                val shell = activity as? MainShellActivity
+                val resumeTab = shell?.currentShellTabId()?.trim().orEmpty()
+                if (resumeTab.isNotEmpty()) {
+                    AuthNavigator.saveResumeFromShell(resumeTab)
+                }
             } catch (_: Exception) {
                 // ignore
             }

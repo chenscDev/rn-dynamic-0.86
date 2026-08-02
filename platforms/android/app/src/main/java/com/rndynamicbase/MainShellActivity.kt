@@ -332,6 +332,9 @@ class MainShellActivity : AppCompatActivity(), DefaultHardwareBackBtnHandler, Pe
         switchTab(tabId)
     }
 
+    /** 当前选中的 Shell Tab（登录回跳等） */
+    fun currentShellTabId(): String? = currentTabId
+
     /** 供全屏页隐藏/恢复底部原生 Tab */
     fun setBottomBarVisible(visible: Boolean) {
         if (!::bottomBar.isInitialized) {
