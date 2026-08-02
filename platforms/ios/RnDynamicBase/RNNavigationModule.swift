@@ -1,12 +1,48 @@
 /**
- * RN 导航桥：切 Tab / 关容器 / 打开业务分包（对齐 Android RNNavigationModule）
+ * RN 导航桥：切 Tab / 关容器 / 打开业务分包 / Shell Tab 事件（对齐 Android）
  */
 import Foundation
 import UIKit
+import React
+
+extension Notification.Name {
+  static let rnShellTabSelected = Notification.Name("RNShellTabSelectedNotification")
+}
 
 @objc(RNNavigationModule)
-final class RNNavigationModule: NSObject {
-  @objc static func requiresMainQueueSetup() -> Bool { true }
+final class RNNavigationModule: RCTEventEmitter {
+  private var observingTab = false
+
+  @objc override static func requiresMainQueueSetup() -> Bool { true }
+
+  override func supportedEvents() -> [String]! {
+    ["RNShellTabSelected"]
+  }
+
+  override func startObserving() {
+    guard !observingTab else { return }
+    observingTab = true
+    NotificationCenter.default.addObserver(
+      self,
+      selector: #selector(onShellTabSelectedNote(_:)),
+      name: .rnShellTabSelected,
+      object: nil
+    )
+  }
+
+  override func stopObserving() {
+    observingTab = false
+    NotificationCenter.default.removeObserver(self, name: .rnShellTabSelected, object: nil)
+  }
+
+  @objc private func onShellTabSelectedNote(_ note: Notification) {
+    let tabId = (note.userInfo?["tabId"] as? String) ?? ""
+    let mountId = (note.userInfo?["mountId"] as? String) ?? tabId
+    sendEvent(
+      withName: "RNShellTabSelected",
+      body: ["tabId": tabId, "mountId": mountId]
+    )
+  }
 
   @objc func switchTab(_ tabId: String) {
     let id = tabId.trimmingCharacters(in: .whitespacesAndNewlines)

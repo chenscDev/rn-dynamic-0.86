@@ -3,12 +3,13 @@
  */
 import UIKit
 
-final class MainShellViewController: UITabBarController {
+final class MainShellViewController: UITabBarController, UITabBarControllerDelegate {
   /// 供 RNNavigationModule.switchTab 调用
   static weak var shared: MainShellViewController?
 
   private let channel: String
   private var tabIds: [String] = []
+  private var tabConfigs: [ShellTabConfig] = []
   private let cache: RNBundleCache
   private var configStore: RNBundleConfigStore?
   private var chromeStatusBarHidden = false
@@ -41,6 +42,7 @@ final class MainShellViewController: UITabBarController {
   override func viewDidLoad() {
     super.viewDidLoad()
     MainShellViewController.shared = self
+    delegate = self
     view.backgroundColor = .systemBackground
     // 选中态：深色 tint；未选中灰色，保证对比明显
     tabBar.tintColor = UIColor(red: 0.06, green: 0.09, blue: 0.16, alpha: 1)
@@ -71,14 +73,39 @@ final class MainShellViewController: UITabBarController {
     let id = tabId.trimmingCharacters(in: .whitespacesAndNewlines)
     guard let idx = tabIds.firstIndex(of: id) else { return }
     selectedIndex = idx
+    notifyShellTabSelected(id)
   }
 
   /// RN 桥：全屏页隐藏/恢复底部 Tab
   func setTabBarVisible(_ visible: Bool) {
     tabBar.isHidden = !visible
-    // 同步调整内容 insets，避免隐藏后仍留白
-    additionalSafeAreaInsets.bottom = visible ? 0 : 0
+    // 隐藏时扣掉 Tab 高度，避免底部留白；显示时清零
+    if visible {
+      additionalSafeAreaInsets.bottom = 0
+    } else {
+      additionalSafeAreaInsets.bottom = -tabBar.bounds.height
+    }
     view.setNeedsLayout()
+  }
+
+  func tabBarController(_ tabBarController: UITabBarController, didSelect viewController: UIViewController) {
+    let idx = tabBarController.selectedIndex
+    guard idx >= 0, idx < tabIds.count else { return }
+    notifyShellTabSelected(tabIds[idx])
+  }
+
+  private func notifyShellTabSelected(_ tabId: String) {
+    let mountId: String
+    if let tab = tabConfigs.first(where: { $0.id == tabId }) {
+      mountId = (tab.bundleKey ?? tab.id)
+    } else {
+      mountId = tabId
+    }
+    NotificationCenter.default.post(
+      name: .rnShellTabSelected,
+      object: nil,
+      userInfo: ["tabId": tabId, "mountId": mountId]
+    )
   }
 
   /// RN 桥：原生标题栏
@@ -189,9 +216,12 @@ final class MainShellViewController: UITabBarController {
       }
 
       tabIds = ids
+      tabConfigs = tabs
       viewControllers = controllers
       if !controllers.isEmpty {
         selectedIndex = 0
+        // 首个 Tab 也发一次，便于 home 冷启动拉 handoff
+        notifyShellTabSelected(ids[0])
       }
       // 标题栏保持在最上层，避免被 Tab 内容盖住
       view.bringSubviewToFront(chromeTitleBar)

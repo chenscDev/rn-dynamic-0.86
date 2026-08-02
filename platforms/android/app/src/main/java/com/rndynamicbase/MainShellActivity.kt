@@ -46,6 +46,8 @@ class MainShellActivity : AppCompatActivity(), DefaultHardwareBackBtnHandler, Pe
     private var shellConfig: ShellConfigFile? = null
     private var configPath: String? = null
     private val tabButtons = linkedMapOf<String, LinearLayout>()
+    /** Tab 保活：hide/show，避免 replace 销毁 RN 状态 */
+    private val tabFragments = linkedMapOf<String, Fragment>()
     private var currentTabId: String? = null
     private lateinit var buildChannel: String
     private lateinit var bottomBar: LinearLayout
@@ -289,13 +291,40 @@ class MainShellActivity : AppCompatActivity(), DefaultHardwareBackBtnHandler, Pe
     private fun switchTab(tabId: String) {
         val config = shellConfig ?: return
         val tab = config.visibleTabs.firstOrNull { it.id == tabId } ?: return
-        currentTabId = tabId
+        val previousId = currentTabId
         updateTabStyles(tabId)
 
-        val fragment = createFragment(tab, config)
-        supportFragmentManager.beginTransaction()
-            .replace(containerId, fragment)
-            .commit()
+        val fm = supportFragmentManager
+        val ft = fm.beginTransaction()
+        if (previousId != null && previousId != tabId) {
+            tabFragments[previousId]?.let { ft.hide(it) }
+        }
+
+        val existing = tabFragments[tabId]
+        if (existing != null) {
+            ft.show(existing)
+        } else {
+            val fragment = createFragment(tab, config)
+            tabFragments[tabId] = fragment
+            ft.add(containerId, fragment, "shell_tab_$tabId")
+        }
+        // 同步提交，便于随后设置前台 Host / 发事件
+        ft.commitNowAllowingStateLoss()
+
+        currentTabId = tabId
+
+        // rn-root：切换前台 ReactHost，并通知 JS 拉取 handoff
+        if (tab.type == "rn-root") {
+            val mountId = (tab.bundleKey ?: tab.id).trim()
+            if (mountId.isNotEmpty()) {
+                RNBundleMount.setForegroundMount(this, mountId)
+                // 新 Fragment 首挂时 context 可能尚未就绪，短延迟再发
+                fragmentContainer.post {
+                    RNBundleMount.setForegroundMount(this, mountId)
+                    RNBundleMount.emitShellTabSelected(this, tabId, mountId)
+                }
+            }
+        }
     }
 
     /** 供 RN 桥接调用：切换底部 Tab */

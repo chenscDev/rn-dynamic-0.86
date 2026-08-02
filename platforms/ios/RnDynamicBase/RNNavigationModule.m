@@ -2,8 +2,9 @@
  * 导出 RNNavigationModule 给 React Native（与 Swift 实现配对）
  */
 #import <React/RCTBridgeModule.h>
+#import <React/RCTEventEmitter.h>
 
-@interface RCT_EXTERN_MODULE(RNNavigationModule, NSObject)
+@interface RCT_EXTERN_MODULE(RNNavigationModule, RCTEventEmitter)
 
 RCT_EXTERN_METHOD(switchTab:(NSString *)tabId)
 RCT_EXTERN_METHOD(setTabBarVisible:(BOOL)visible)

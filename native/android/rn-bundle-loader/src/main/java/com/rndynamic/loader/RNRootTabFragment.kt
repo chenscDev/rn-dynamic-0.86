@@ -112,7 +112,8 @@ class RNRootTabFragment : Fragment() {
                 val request = buildRequest(bundleKey, channelName, configPath)
                 if (!isAdded) return@thread
                 val act = activity ?: return@thread
-                RNBundleMount.mount(act, contentHost, request)
+                // mountId=bundleKey，供 Shell hide/show 多 Tab 保活
+                RNBundleMount.mount(act, contentHost, request, bundleKey.ifBlank { request.moduleName })
                 val report = session.finish(act.applicationContext)
                 RNLoadPerfHolder.lastReport = report
                 RNBundleLoadTrace.clear()
@@ -312,18 +313,43 @@ class RNRootTabFragment : Fragment() {
         return flags and ApplicationInfo.FLAG_DEBUGGABLE != 0
     }
 
+    override fun onHiddenChanged(hidden: Boolean) {
+        super.onHiddenChanged(hidden)
+        val act = activity ?: return
+        val mountId = bundleKey.ifBlank { return }
+        if (!hidden) {
+            RNBundleMount.setForegroundMount(act, mountId)
+            RNBundleMount.forwardOnHostResume(act)
+        } else {
+            RNBundleMount.forwardOnHostPause(act)
+        }
+    }
+
     override fun onResume() {
         super.onResume()
-        activity?.let { RNBundleMount.forwardOnHostResume(it) }
+        if (!isHidden) {
+            activity?.let {
+                val mountId = bundleKey.ifBlank { return@let }
+                RNBundleMount.setForegroundMount(it, mountId)
+                RNBundleMount.forwardOnHostResume(it)
+            }
+        }
     }
 
     override fun onPause() {
-        activity?.let { RNBundleMount.forwardOnHostPause(it) }
+        if (!isHidden) {
+            activity?.let { RNBundleMount.forwardOnHostPause(it) }
+        }
         super.onPause()
     }
 
     override fun onDestroyView() {
-        activity?.let { RNBundleMount.forwardOnHostDestroy(it) }
+        // hide/show 不会走到这里；真正销毁 Fragment 时才释放对应 Host
+        val act = activity
+        val mountId = bundleKey
+        if (act != null && mountId.isNotBlank()) {
+            RNBundleMount.destroyMount(act, mountId)
+        }
         super.onDestroyView()
     }
 

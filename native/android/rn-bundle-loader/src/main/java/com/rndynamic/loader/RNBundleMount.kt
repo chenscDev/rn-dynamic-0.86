@@ -9,6 +9,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.ViewTreeObserver
 import android.widget.FrameLayout
+import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.JSBundleLoader
 import com.facebook.react.bridge.UiThreadUtil
 import com.facebook.react.common.annotations.UnstableReactNativeAPI
@@ -18,6 +19,7 @@ import com.facebook.react.defaults.DefaultTurboModuleManagerDelegate
 import com.facebook.react.fabric.ComponentFactory
 import com.facebook.react.interfaces.fabric.ReactSurface
 import com.facebook.react.modules.core.DefaultHardwareBackBtnHandler
+import com.facebook.react.modules.core.DeviceEventManagerModule
 import com.facebook.react.interfaces.TaskInterface
 import com.facebook.react.packagerconnection.PackagerConnectionSettings
 import com.facebook.react.runtime.ReactHostImpl
@@ -56,11 +58,26 @@ object RNBundleMount {
 
     class MountException(message: String, cause: Throwable? = null) : Exception(message, cause)
 
-    /** 挂载后持有 Host，便于 Activity 生命周期转发 */
-    private val activeHostsByActivity = mutableMapOf<Int, ReactHostImpl>()
+    /**
+     * 多 Tab 保活：同一 Activity 可并存多个 ReactHost（按 mountId）。
+     * 生命周期 / 返回键只转发给当前前台 mount。
+     */
+    private val hostsByActivity =
+        ConcurrentHashMap<Int, ConcurrentHashMap<String, ReactHostImpl>>()
+    private val foregroundMountId = ConcurrentHashMap<Int, String>()
 
     /** Activity 注册运行时错误回调，避免 JS 异常后静默白屏 */
     private val runtimeErrorListeners = ConcurrentHashMap<Int, (String) -> Unit>()
+
+    private fun foregroundHost(activity: Activity): ReactHostImpl? {
+        val actKey = activity.hashCode()
+        val map = hostsByActivity[actKey] ?: return null
+        val fg = foregroundMountId[actKey]
+        if (fg != null) {
+            map[fg]?.let { return it }
+        }
+        return map.values.firstOrNull()
+    }
 
     @JvmStatic
     fun setRuntimeErrorListener(activity: Activity, listener: ((String) -> Unit)?) {
@@ -72,10 +89,79 @@ object RNBundleMount {
         }
     }
 
-    /** Activity onResume 时转发给 ReactHost */
+    /** 切换前台 Tab 对应的 ReactHost（hide/show 时调用） */
+    @JvmStatic
+    fun setForegroundMount(activity: Activity, mountId: String) {
+        val id = mountId.trim()
+        if (id.isEmpty()) {
+            return
+        }
+        val actKey = activity.hashCode()
+        val map = hostsByActivity[actKey] ?: return
+        if (!map.containsKey(id)) {
+            return
+        }
+        val prev = foregroundMountId[actKey]
+        if (prev != null && prev != id) {
+            map[prev]?.let { host ->
+                runOnUiThreadSyncFromAnyThread { host.onHostPause(activity) }
+            }
+        }
+        foregroundMountId[actKey] = id
+        map[id]?.let { host ->
+            runOnUiThreadSyncFromAnyThread {
+                if (activity is DefaultHardwareBackBtnHandler) {
+                    host.onHostResume(activity, activity)
+                } else {
+                    host.onHostResume(activity)
+                }
+            }
+        }
+    }
+
+    /** 销毁单个 Tab 的 Host（Fragment onDestroyView）；hide 不会触发 */
+    @JvmStatic
+    fun destroyMount(activity: Activity, mountId: String) {
+        val id = mountId.trim()
+        if (id.isEmpty()) {
+            return
+        }
+        val actKey = activity.hashCode()
+        val map = hostsByActivity[actKey] ?: return
+        val host = map.remove(id) ?: return
+        if (foregroundMountId[actKey] == id) {
+            foregroundMountId.remove(actKey)
+        }
+        if (map.isEmpty()) {
+            hostsByActivity.remove(actKey)
+        }
+        runOnUiThreadSyncFromAnyThread { host.onHostDestroy(activity) }
+    }
+
+    /** 通知前台 RN：Shell Tab 已选中（用于 handoff 拉取等） */
+    @JvmStatic
+    fun emitShellTabSelected(activity: Activity, tabId: String, mountId: String) {
+        val host = foregroundHost(activity) ?: return
+        runOnUiThreadSyncFromAnyThread {
+            try {
+                val ctx = host.currentReactContext ?: return@runOnUiThreadSyncFromAnyThread
+                val map = Arguments.createMap().apply {
+                    putString("tabId", tabId)
+                    putString("mountId", mountId)
+                }
+                ctx
+                    .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
+                    .emit("RNShellTabSelected", map)
+            } catch (error: Exception) {
+                Log.w("RNBundleMount", "emitShellTabSelected 失败: ${error.message}")
+            }
+        }
+    }
+
+    /** Activity onResume 时转发给前台 ReactHost */
     @JvmStatic
     fun forwardOnHostResume(activity: Activity) {
-        val host = activeHostsByActivity[activity.hashCode()] ?: return
+        val host = foregroundHost(activity) ?: return
         runOnUiThreadSyncFromAnyThread {
             if (activity is DefaultHardwareBackBtnHandler) {
                 host.onHostResume(activity, activity)
@@ -85,20 +171,23 @@ object RNBundleMount {
         }
     }
 
-    /** Activity onPause 时转发给 ReactHost */
+    /** Activity onPause 时转发给前台 ReactHost */
     @JvmStatic
     fun forwardOnHostPause(activity: Activity) {
-        val host = activeHostsByActivity[activity.hashCode()] ?: return
+        val host = foregroundHost(activity) ?: return
         runOnUiThreadSyncFromAnyThread { host.onHostPause(activity) }
     }
 
-    /** Activity onDestroy 时转发给 ReactHost */
+    /** Activity onDestroy：销毁该 Activity 下全部 Host */
     @JvmStatic
     fun forwardOnHostDestroy(activity: Activity) {
         val key = activity.hashCode()
         runtimeErrorListeners.remove(key)
-        val host = activeHostsByActivity.remove(key) ?: return
-        runOnUiThreadSyncFromAnyThread { host.onHostDestroy(activity) }
+        foregroundMountId.remove(key)
+        val map = hostsByActivity.remove(key) ?: return
+        map.values.forEach { host ->
+            runOnUiThreadSyncFromAnyThread { host.onHostDestroy(activity) }
+        }
     }
 
     /**
@@ -107,7 +196,7 @@ object RNBundleMount {
      */
     @JvmStatic
     fun forwardOnBackPressed(activity: Activity): Boolean {
-        val host = activeHostsByActivity[activity.hashCode()] ?: return false
+        val host = foregroundHost(activity) ?: return false
         var handled = false
         runOnUiThreadSyncFromAnyThread {
             handled = host.onBackPressed()
@@ -126,7 +215,7 @@ object RNBundleMount {
         resultCode: Int,
         data: android.content.Intent?,
     ) {
-        val host = activeHostsByActivity[activity.hashCode()] ?: return
+        val host = foregroundHost(activity) ?: return
         runOnUiThreadSyncFromAnyThread {
             host.onActivityResult(activity, requestCode, resultCode, data)
         }
@@ -136,24 +225,36 @@ object RNBundleMount {
      * 在 container 中挂载 RN（必须在后台线程调用，禁止在主线程 waitForCompletion）。
      * - 仅 page：以 page 为入口 bundle
      * - common + page：合并为单脚本一次加载（避免二次 load 导致 registerPage 未执行）
+     * @param mountId Tab 保活键，默认 moduleName；同一 Activity 下需唯一
      */
     @JvmStatic
-    fun mount(activity: Activity, container: ViewGroup, request: Request): Any {
+    @JvmOverloads
+    fun mount(
+        activity: Activity,
+        container: ViewGroup,
+        request: Request,
+        mountId: String = request.moduleName,
+    ): Any {
         if (UiThreadUtil.isOnUiThread()) {
             throw MountException(
                 "mount 不能在主线程调用（会导致 ANR）。请在后台线程执行挂载，仅 UI 更新切回主线程。",
             )
         }
-        return mountInternal(activity, container, request)
+        return mountInternal(activity, container, request, mountId.ifBlank { request.moduleName })
     }
 
-    private fun mountInternal(activity: Activity, container: ViewGroup, request: Request): View {
+    private fun mountInternal(
+        activity: Activity,
+        container: ViewGroup,
+        request: Request,
+        mountId: String,
+    ): View {
         return try {
             val useDual = !request.commonBundlePathOrUrl.isNullOrBlank() && request.useSplitPageBundle
             if (useDual) {
-                mountDual(activity, container, request)
+                mountDual(activity, container, request, mountId)
             } else {
-                mountSingle(activity, container, request)
+                mountSingle(activity, container, request, mountId)
             }
         } catch (error: MountException) {
             throw error
@@ -162,7 +263,12 @@ object RNBundleMount {
         }
     }
 
-    private fun mountSingle(activity: Activity, container: ViewGroup, request: Request): View {
+    private fun mountSingle(
+        activity: Activity,
+        container: ViewGroup,
+        request: Request,
+        mountId: String,
+    ): View {
         val pageSource = request.pageBundlePathOrUrl
         val metroLive = isHttp(pageSource)
         val jsMainModulePath = request.jsMainModulePath?.takeIf { it.isNotBlank() }
@@ -198,12 +304,24 @@ object RNBundleMount {
             useDevSupport = metroLive,
             jsMainModulePath = jsMainModulePath,
         )
-        val surface = attachSurface(activity, container, reactHost, request.moduleName, request.initialProps)
+        val surface = attachSurface(
+            activity,
+            container,
+            reactHost,
+            request.moduleName,
+            request.initialProps,
+            mountId,
+        )
         RNBundleLoadTrace.current()?.end(detail = if (metroLive) "metro" else "file")
         return surface
     }
 
-    private fun mountDual(activity: Activity, container: ViewGroup, request: Request): View {
+    private fun mountDual(
+        activity: Activity,
+        container: ViewGroup,
+        request: Request,
+        mountId: String,
+    ): View {
         val commonSource = request.commonBundlePathOrUrl!!
         val pageSource = request.pageBundlePathOrUrl
         val commonLocal = resolveToLocalFile(activity, commonSource)
@@ -239,7 +357,14 @@ object RNBundleMount {
             sourceUrl = null,
             useDevSupport = false,
         )
-        val surface = attachSurface(activity, container, reactHost, request.moduleName, request.initialProps)
+        val surface = attachSurface(
+            activity,
+            container,
+            reactHost,
+            request.moduleName,
+            request.initialProps,
+            mountId,
+        )
         RNBundleLoadTrace.current()?.end(detail = "surface attached")
         return surface
     }
@@ -369,8 +494,16 @@ object RNBundleMount {
         reactHost: ReactHostImpl,
         moduleName: String,
         initialProps: Bundle?,
+        mountId: String,
     ): View {
-        activeHostsByActivity[activity.hashCode()] = reactHost
+        val actKey = activity.hashCode()
+        val map = hostsByActivity.getOrPut(actKey) { ConcurrentHashMap() }
+        // 同 mountId 重复挂载时先销毁旧 Host，避免泄漏
+        map.remove(mountId)?.let { old ->
+            runOnUiThreadSync { old.onHostDestroy(activity) }
+        }
+        map[mountId] = reactHost
+        foregroundMountId[actKey] = mountId
         runOnUiThreadSync {
             if (activity is DefaultHardwareBackBtnHandler) {
                 reactHost.onHostResume(activity, activity)
