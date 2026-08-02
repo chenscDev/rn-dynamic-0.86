@@ -16,6 +16,10 @@
 		A10200000000000000000003 /* ShellConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10100000000000000000003 /* ShellConfig.swift */; };
 		A10200000000000000000004 /* RNNavigationModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10100000000000000000004 /* RNNavigationModule.swift */; };
 		A10200000000000000000005 /* RNNavigationModule.m in Sources */ = {isa = PBXBuildFile; fileRef = A10100000000000000000005 /* RNNavigationModule.m */; };
+		A10200000000000000000006 /* AuthSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10100000000000000000006 /* AuthSession.swift */; };
+		A10200000000000000000007 /* AuthGate.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10100000000000000000007 /* AuthGate.swift */; };
+		A10200000000000000000008 /* RNAuthModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10100000000000000000008 /* RNAuthModule.swift */; };
+		A10200000000000000000009 /* RNAuthModule.m in Sources */ = {isa = PBXBuildFile; fileRef = A10100000000000000000009 /* RNAuthModule.m */; };
 		A10200000000000000000010 /* RNBundleCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10100000000000000000010 /* RNBundleCache.swift */; };
 		A10200000000000000000011 /* RNBundleConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10100000000000000000011 /* RNBundleConfig.swift */; };
 		A10200000000000000000012 /* RNBundleMount.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10100000000000000000012 /* RNBundleMount.swift */; };
@@ -41,6 +45,10 @@
 		A10100000000000000000003 /* ShellConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ShellConfig.swift; path = RnDynamicBase/ShellConfig.swift; sourceTree = "<group>"; };
 		A10100000000000000000004 /* RNNavigationModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = RNNavigationModule.swift; path = RnDynamicBase/RNNavigationModule.swift; sourceTree = "<group>"; };
 		A10100000000000000000005 /* RNNavigationModule.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = RNNavigationModule.m; path = RnDynamicBase/RNNavigationModule.m; sourceTree = "<group>"; };
+		A10100000000000000000006 /* AuthSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AuthSession.swift; path = RnDynamicBase/AuthSession.swift; sourceTree = "<group>"; };
+		A10100000000000000000007 /* AuthGate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AuthGate.swift; path = RnDynamicBase/AuthGate.swift; sourceTree = "<group>"; };
+		A10100000000000000000008 /* RNAuthModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = RNAuthModule.swift; path = RnDynamicBase/RNAuthModule.swift; sourceTree = "<group>"; };
+		A10100000000000000000009 /* RNAuthModule.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = RNAuthModule.m; path = RnDynamicBase/RNAuthModule.m; sourceTree = "<group>"; };
 		A10100000000000000000010 /* RNBundleCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = RNBundleCache.swift; path = ../../native/ios/RNBundleLoader/Sources/RNBundleCache.swift; sourceTree = "<group>"; };
 		A10100000000000000000011 /* RNBundleConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = RNBundleConfig.swift; path = ../../native/ios/RNBundleLoader/Sources/RNBundleConfig.swift; sourceTree = "<group>"; };
 		A10100000000000000000012 /* RNBundleMount.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = RNBundleMount.swift; path = ../../native/ios/RNBundleLoader/Sources/RNBundleMount.swift; sourceTree = "<group>"; };
@@ -72,6 +80,10 @@
 				A10100000000000000000003 /* ShellConfig.swift */,
 				A10100000000000000000004 /* RNNavigationModule.swift */,
 				A10100000000000000000005 /* RNNavigationModule.m */,
+				A10100000000000000000006 /* AuthSession.swift */,
+				A10100000000000000000007 /* AuthGate.swift */,
+				A10100000000000000000008 /* RNAuthModule.swift */,
+				A10100000000000000000009 /* RNAuthModule.m */,
 				A10100000000000000000010 /* RNBundleCache.swift */,
 				A10100000000000000000011 /* RNBundleConfig.swift */,
 				A10100000000000000000012 /* RNBundleMount.swift */,
@@ -287,6 +299,10 @@
 				A10200000000000000000003 /* ShellConfig.swift in Sources */,
 				A10200000000000000000004 /* RNNavigationModule.swift in Sources */,
 				A10200000000000000000005 /* RNNavigationModule.m in Sources */,
+				A10200000000000000000006 /* AuthSession.swift in Sources */,
+				A10200000000000000000007 /* AuthGate.swift in Sources */,
+				A10200000000000000000008 /* RNAuthModule.swift in Sources */,
+				A10200000000000000000009 /* RNAuthModule.m in Sources */,
 				A10200000000000000000010 /* RNBundleCache.swift in Sources */,
 				A10200000000000000000011 /* RNBundleConfig.swift in Sources */,
 				A10200000000000000000012 /* RNBundleMount.swift in Sources */,

@@ -22,9 +22,10 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     reactNativeFactory = factory
 
     window = UIWindow(frame: UIScreen.main.bounds)
-    // 内测壳：原生 Tab（首页 / 问答 / 我的），不再整页加载宿主 index 包
-    let shell = MainShellViewController(channel: ShellConfigLoader.defaultChannel)
-    window?.rootViewController = shell
+    // 登录门禁：已登录 / 无 login 包 → Shell；否则进登录 RN
+    window?.rootViewController = AuthGate.makeRootViewController(
+      channel: ShellConfigLoader.defaultChannel
+    )
     window?.makeKeyAndVisible()
     return true
   }
